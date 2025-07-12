@@ -32,7 +32,7 @@ def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
     merge_freq_table[pair] = merge_freq_table.get(pair, 0) + word_freq
 
 # Dummy merge.
-def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> list[bytes]:
+def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> tuple[list[bytes], list[tuple[bytes, bytes]]]:
   new_words = set()
   merge_sequence = []
   for _ in range(steps):
@@ -44,38 +44,38 @@ def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> list
     # Find the largest entry by frequency, break ties by lexicographical value.
   
     # Naive implementation, using Python max.
-    most_frequent_pair = max(token_pair_freq_table, key=lambda k: (token_pair_freq_table[k], k))
+    most_frequent_pair = max(token_pair_freq_table, key=lambda k, t=token_pair_freq_table: (t[k], k))
     merged_most_frequent_pair = most_frequent_pair[0] + most_frequent_pair[1]
+    merge_sequence.append((most_frequent_pair[0], most_frequent_pair[1]))
+    new_words.add(merged_most_frequent_pair)
+
     # store words. to be optimized by indices
     words_need_merge = []
     for word in tokenization_table.keys():
       # Store the indices of the pair with max frequency, instead of doing the merge in-place.
       for i in range(len(word) - 1):
         if word[i] == most_frequent_pair[0] and word[i + 1] ==  most_frequent_pair[1]:
-          print(f'Recording token merge for {word[i:i + 2]}, at position {i}')
+          # print(f'Recording token merge for {word[i:i + 2]}, at position {i}')
           words_need_merge.append(word)
+          break
     
     # Merge the words.
     for word in words_need_merge:
-      for i in range(len(word) - 1):
+      for i in reversed(range(len(word) - 1)):
         if word[i] == most_frequent_pair[0] and word[i + 1] ==  most_frequent_pair[1]:
-          print(f'Recording token merge for {word[i:i + 2]}, for word {word}')
+          # print(f'Recording token merge for {word[i:i + 2]}, for word {word}')
           merged_word = (*word[:i], merged_most_frequent_pair, *word[i + 2:])
-          new_words.add(merged_most_frequent_pair)
           tokenization_table[merged_word] = tokenization_table.pop(word)
-    print(f"Table after {steps} merge: {tokenization_table}")
+          word = merged_word
 
   return (list(new_words), merge_sequence)
 
 
 # Sanity check for the dummy pretokenization/merge.
-with open(rf'{os.path.dirname(os.path.abspath(__file__))}\\simple_text.txt', 'r', encoding='utf-8') as file:
-  content = file.read()
-  pretokenization = pretokenize_dummy_tuple_bytes(content)
-  print(f'Dummy Pretokenization result: ${pretokenization}')
-  new_words = merge_dummy(pretokenization, 6)
-  vocab = STARTER_VOCABULARY + new_words
-  print(f'Merge result - New words: {new_words}')
-
-def merge_dummy():
-  pass
+# with open(rf'{os.path.dirname(os.path.abspath(__file__))}\\simple_text.txt', 'r', encoding='utf-8') as file:
+#   content = file.read()
+#   pretokenization = pretokenize_dummy_tuple_bytes(content)
+#   print(f'Dummy Pretokenization result: ${pretokenization}')
+#   new_words, merge_sequence = merge_dummy(pretokenization, 6)
+#   vocab = STARTER_VOCABULARY + new_words
+#   print(f'Merge result - New words: {new_words}')
