@@ -9,6 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
+from cs336_basics.bpe.tokenizer_prototypes import STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
 
 
 def run_linear(
@@ -588,4 +589,12 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    raise NotImplementedError
+    with open(rf'{input_path}', 'r', encoding='utf-8') as file:
+        content = file.read()
+        pretokenization = pretokenize_dummy_tuple_bytes(content)
+        # print(f'Dummy Pretokenization result: ${pretokenization}')
+        new_words, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
+        vocab = STARTER_VOCABULARY + new_words
+        # print(f'Merge result - New words: {new_words}')
+        
+    return (vocab, merge_sequence)
