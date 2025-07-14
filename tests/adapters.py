@@ -593,8 +593,7 @@ def run_train_bpe(
         content = file.read()
         pretokenization = pretokenize_dummy_tuple_bytes(content)
         # print(f'Dummy Pretokenization result: ${pretokenization}')
-        new_words, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
-        vocab = STARTER_VOCABULARY + new_words
+        vocab, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
         # print(f'Merge result - New words: {new_words}')
         
     return (vocab, merge_sequence)

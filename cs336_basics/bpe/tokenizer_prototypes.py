@@ -32,8 +32,8 @@ def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
     merge_freq_table[pair] = merge_freq_table.get(pair, 0) + word_freq
 
 # Dummy merge.
-def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> tuple[list[bytes], list[tuple[bytes, bytes]]]:
-  new_words = set()
+def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+  new_words = []
   merge_sequence = []
   for _ in range(steps):
     token_pair_freq_table = {}
@@ -46,29 +46,37 @@ def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> tupl
     # Naive implementation, using Python max.
     most_frequent_pair = max(token_pair_freq_table, key=lambda k, t=token_pair_freq_table: (t[k], k))
     merged_most_frequent_pair = most_frequent_pair[0] + most_frequent_pair[1]
+    # print(f'most_frequent_pair is {most_frequent_pair}, frequency: {token_pair_freq_table[most_frequent_pair]}')
     merge_sequence.append((most_frequent_pair[0], most_frequent_pair[1]))
-    new_words.add(merged_most_frequent_pair)
+    # Record as a new word in the final vocabulary.
+    new_words.append(merged_most_frequent_pair)
 
-    # store words. to be optimized by indices
-    words_need_merge = []
+    # store words to be merged, and record the operations.
+    operations = []
     for word in tokenization_table.keys():
       # Store the indices of the pair with max frequency, instead of doing the merge in-place.
-      for i in range(len(word) - 1):
-        if word[i] == most_frequent_pair[0] and word[i + 1] ==  most_frequent_pair[1]:
-          # print(f'Recording token merge for {word[i:i + 2]}, at position {i}')
-          words_need_merge.append(word)
-          break
+      indices_appeareance = [i for i in range(len(word) - 1) if word[i:i + 2] == most_frequent_pair]
+      # Commit all merges for this word.
+      if indices_appeareance:
+        new_word = []
+        i = 0
+        while i < len(word):
+          if i in indices_appeareance:
+            new_word.append(merged_most_frequent_pair)
+            i += 2
+          else:
+            new_word.append(word[i])
+            i += 1
+        new_word = tuple(new_word)
+        operations.append((word, new_word, tokenization_table[word]))
     
-    # Merge the words.
-    for word in words_need_merge:
-      for i in reversed(range(len(word) - 1)):
-        if word[i] == most_frequent_pair[0] and word[i + 1] ==  most_frequent_pair[1]:
-          # print(f'Recording token merge for {word[i:i + 2]}, for word {word}')
-          merged_word = (*word[:i], merged_most_frequent_pair, *word[i + 2:])
-          tokenization_table[merged_word] = tokenization_table.pop(word)
-          word = merged_word
+    for word, new_word, appearances in operations:
+      # Avoid overwritting the the new word's appearances if it already exists.
+      tokenization_table[new_word] = tokenization_table.get(new_word, 0) + appearances
+      del tokenization_table[word]
 
-  return (list(new_words), merge_sequence)
+  return (dict(enumerate(STARTER_VOCABULARY + new_words)), merge_sequence)
+
 
 
 # Sanity check for the dummy pretokenization/merge.
