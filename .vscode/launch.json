@@ -10,7 +10,15 @@
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
-      "args": ["tests/test_train_bpe.py::test_train_bpe"],
+      "args": ["tests/test_train_bpe.py::test_train_bpe_special_tokens"],
+      "justMyCode": true,
+    },
+    {
+      "name": "Pytest test_train_bpe.py all",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["tests/test_train_bpe.py"],
       "justMyCode": true,
     },
     {

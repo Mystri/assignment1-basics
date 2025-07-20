@@ -1,6 +1,7 @@
+import multiprocessing
 class Tokenizer:
   def __init__(self, vocab, merges, special_tokens=None):
-    pass
+    self.vocab
   
   def encode(self, text: str) -> list[int]:
     pass

@@ -9,7 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
-from cs336_basics.bpe.tokenizer_prototypes import STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
+from cs336_basics.bpe.tokenizer_prototypes import EOT, STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
 
 
 def run_linear(
@@ -591,7 +591,7 @@ def run_train_bpe(
     """
     with open(rf'{input_path}', 'r', encoding='utf-8') as file:
         content = file.read()
-        pretokenization = pretokenize_dummy_tuple_bytes(content)
+        pretokenization = pretokenize_dummy_tuple_bytes(content, [EOT])
         # print(f'Dummy Pretokenization result: ${pretokenization}')
         vocab, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
         # print(f'Merge result - New words: {new_words}')
