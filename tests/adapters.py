@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from collections import defaultdict
 import os
-from typing import IO, Any, BinaryIO
+import regex as re
+from typing import IO, Any, BinaryIO, Tuple
 from collections.abc import Iterable
 from jaxtyping import Float, Int
 
 import numpy.typing as npt
 import torch
 from torch import Tensor
+from tqdm import tqdm
 
-from cs336_basics.bpe.tokenizer_prototypes import EOT, STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
+from cs336_basics.bpe.tokenizer_prototypes import EOT, PAT, STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
 
 
 def run_linear(
@@ -589,11 +592,35 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
+    pretokenization1 = None
     with open(rf'{input_path}', 'r', encoding='utf-8') as file:
         content = file.read()
-        pretokenization = pretokenize_dummy_tuple_bytes(content, [EOT])
+    
+        pretokenization1 = pretokenize_dummy_tuple_bytes(content, [EOT])
         # print(f'Dummy Pretokenization result: ${pretokenization}')
-        vocab, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
         # print(f'Merge result - New words: {new_words}')
-        
+
+    pretokenization = defaultdict(int)
+
+    with open(input_path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    def to_bytes_tuple(word: str) -> Tuple[bytes]:
+        l = list(word.encode("utf-8"))
+        l = [bytes([x]) for x in l]
+        return tuple(l)
+    
+    chunks = re.split("|".join(map(re.escape, special_tokens)), text)
+    
+    for chunk in tqdm(chunks, desc="Pretokenize"):
+        for m in re.finditer(PAT, chunk):
+            word = m.group(0)
+            pretokenization[to_bytes_tuple(word)] += 1   # key of pre_tokens_cnt
+
+    assert pretokenization == pretokenization1
+    
+    print(f'Dummy Pretokenization result: ${pretokenization}')
+    vocab, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
+    print(f'Merge result - New words: {new_words}')
+    
     return (vocab, merge_sequence)

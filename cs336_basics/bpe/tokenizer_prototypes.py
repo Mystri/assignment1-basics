@@ -2,7 +2,7 @@ from typing import BinaryIO
 import regex as re
 from multiprocessing import Pool
 import os
-from collections import Counter
+from collections import Counter, defaultdict
 from tqdm import tqdm
 
 PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
@@ -94,6 +94,8 @@ def train_bpe(
 
     # split to num_chunks chunks.
     boundaries = find_chunk_boundaries(f, num_chunks, special_tokens)
+    
+    
 
     # Organize them into tasks.
     tasks = []
@@ -121,15 +123,15 @@ def train_bpe(
 # Dummy pretokenizer.
 # Implements the pretokenizer, but takes a plain string and has no parellelism.
 def pretokenize_dummy_tuple_bytes(input_str: str, special_tokens: list[str]) -> dict[tuple[bytes], int]:
-  frequency_table: dict[tuple[bytes]] = {}
+  frequency_table: dict[tuple[bytes]] = defaultdict(int)
   
-  # Change the splitter Regex so that special tokens get directly feed into, instead
+  # Change the splitter Regex so that special tokens get directly feed into, instead of being split
   escaped_special_tokens = [re.escape(token) for token in special_tokens]
   special_token_patterns = "|".join(escaped_special_tokens)
 
   pattern_filtered_special_tokens = f"(?:{special_token_patterns})|{PAT}"
 
-  for match in re.finditer(pattern_filtered_special_tokens, input_str):
+  for match in tqdm(re.finditer(pattern_filtered_special_tokens, input_str), desc="Pretokenization"):
     match = match.group()
 
     if match in special_tokens:
@@ -137,10 +139,40 @@ def pretokenize_dummy_tuple_bytes(input_str: str, special_tokens: list[str]) -> 
 
     token = match.encode(encoding='utf-8')
     # Convert token to token of 'bytes', allow merging.
-    token_byte_tuple = tuple([bytes([char]) for char in token])
+    token_byte_tuple = tuple(bytes([char]) for char in token)
     # Update the token's count
-    frequency_table[token_byte_tuple] = frequency_table.get(token_byte_tuple, 0) + 1
+    frequency_table[token_byte_tuple] += 1
   return frequency_table
+  
+def pre_tokenize_and_count(
+    args: tuple[bytes, dict[str, int], re.Pattern]
+) -> Counter:
+    chunk_bytes, special_token_to_id, delimiter_pattern_compiled = args
+    chunk = chunk_bytes.decode("utf-8", errors="ignore")
+    special_tokens_set = set(special_token_to_id.keys())
+    
+    words_list = []
+    
+    if delimiter_pattern_compiled:
+        sub_chunks = delimiter_pattern_compiled.split(chunk)
+    else:
+        sub_chunks = [chunk]
+
+    for sub_chunk in sub_chunks:
+        if not sub_chunk:
+            continue
+            
+        if sub_chunk in special_tokens_set:
+            token_id = special_token_to_id[sub_chunk]
+            words_list.append((token_id,))
+        else:
+            for word_str in PAT_COMPILED.findall(sub_chunk):
+                if word_str:
+                    byte_sequence = word_str.encode("utf-8")
+                    id_sequence = tuple(byte_sequence)
+                    words_list.append(id_sequence)
+
+    return Counter(words_list)
 
 # Add all byte pairs of a word to a frequency table. For example, " lower" -> ' l', 'lo', 'ow', 'we', 'er'.
 def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
@@ -153,7 +185,7 @@ def merge_dummy(tokenization_table: dict[tuple[bytes], int], steps: int) -> tupl
   new_words = []
   merge_sequence = []  
 
-  for _ in range(steps):
+  for _ in tqdm(range(steps), desc="Merge"):
     token_pair_freq_table = {}
     # Initialize the merge freq table by adding the byte pairs.
     for word in tokenization_table.keys():

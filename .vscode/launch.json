@@ -6,7 +6,7 @@
   "configurations": [
   
     {
-      "name": "Pytest test_train_bpe.py",
+      "name": "Pytest test_train_bpe.py::test_train_bpe_special_tokens",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
