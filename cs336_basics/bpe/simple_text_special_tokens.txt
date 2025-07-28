@@ -1,0 +1,3 @@
+a
+<|endoftext|>
+b<|endoftext|>c

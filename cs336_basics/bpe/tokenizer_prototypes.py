@@ -144,36 +144,7 @@ def pretokenize_dummy_tuple_bytes(input_str: str, special_tokens: list[str]) -> 
     frequency_table[token_byte_tuple] += 1
   return frequency_table
   
-def pre_tokenize_and_count(
-    args: tuple[bytes, dict[str, int], re.Pattern]
-) -> Counter:
-    chunk_bytes, special_token_to_id, delimiter_pattern_compiled = args
-    chunk = chunk_bytes.decode("utf-8", errors="ignore")
-    special_tokens_set = set(special_token_to_id.keys())
-    
-    words_list = []
-    
-    if delimiter_pattern_compiled:
-        sub_chunks = delimiter_pattern_compiled.split(chunk)
-    else:
-        sub_chunks = [chunk]
-
-    for sub_chunk in sub_chunks:
-        if not sub_chunk:
-            continue
-            
-        if sub_chunk in special_tokens_set:
-            token_id = special_token_to_id[sub_chunk]
-            words_list.append((token_id,))
-        else:
-            for word_str in PAT_COMPILED.findall(sub_chunk):
-                if word_str:
-                    byte_sequence = word_str.encode("utf-8")
-                    id_sequence = tuple(byte_sequence)
-                    words_list.append(id_sequence)
-
-    return Counter(words_list)
-
+  
 # Add all byte pairs of a word to a frequency table. For example, " lower" -> ' l', 'lo', 'ow', 'we', 'er'.
 def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
   for i in range(len(word) - 1):
