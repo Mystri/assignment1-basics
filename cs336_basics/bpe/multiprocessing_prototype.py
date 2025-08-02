@@ -23,7 +23,7 @@ def pre_tokenize_and_count(
     text = bytes.decode("utf-8", errors="ignore")
     special_tokens = set(special_token_vocabulary.keys())
     
-    words_list = []
+    words_list: list[Word] = []
     
     # Split the text by the special tokens.
     if special_tokens_regex:
@@ -49,18 +49,6 @@ def pre_tokenize_and_count(
 
     return Counter(words_list)
 
-# Add all byte pairs of a word to a frequency table. For example, " lower" -> ' l', 'lo', 'ow', 'we', 'er'.
-def put_word_in_merge_freq_table(starter_vocab: Vocab, merge_freq_table: Counter[Token], word: str, word_freq: int, pair_to_words: defaultdict[set]):
-  for i in range(len(word) - 1):
-    pair_str = word[i:i + 2] # Get the pair, should be 2 characters.
-    # Convert the pair to indices in the vocabulary.
-    pair = TokenPair(starter_vocab[pair_str[0]], starter_vocab[pair_str[1]])
-
-    # Create a mapping from the pair to the words that contain it.
-    pair_to_words[pair].add(word)
-
-    # Update the frequency table.
-    merge_freq_table[pair] = merge_freq_table.get(pair, 0) + word_freq
 
 class TokenPair:
     def __init__(self, first: Token, second: Token, frequency: int):
@@ -92,22 +80,44 @@ class TokenPairPQ:
     def is_empty(self) -> bool:
         return len(self.pq) == 0
 
+# Add all byte pairs of a word to a frequency table. For example, " lower" -> ' l', 'lo', 'ow', 'we', 'er'.
+def initialize_word(
+      word: Word,
+      word_freq: int,
+      token_pair_freq_table: Counter[tuple[Token,Token]], 
+      pair_to_words: dict[TokenPair, set]
+    ):
+  for i in range(len(word) - 1):
+    pair = word[i:i + 2] # Get the pair, should be 2 Tokens.
+
+    # Create a mapping from the pair to the words that contain it.
+    pair_to_words[pair].add(word)
+
+    # Update the frequency table.
+    token_pair_freq_table[pair] = token_pair_freq_table[pair] + word_freq
+
 # Merge.
 def merge(starter_vocab: Vocab, word_freq_table: Counter[Word], steps: int) -> tuple[dict[int, int], list[tuple[bytes, bytes]]]:
   new_words = []
   merge_sequence = []  
 
-  token_pair_freq_table = defaultdict(int)
+  token_pair_freq_table: dict[TokenPair, int] = defaultdict(int)
 
   # Create a map from each pair to their origins, so that each pair can refer back to the words that contained it.
-  words_containing = defaultdict(set)
+  words_containing_pair: dict[TokenPair, set] = defaultdict(set)
 
-  # Initialize the merge freq table by initializing the byte pairs.
-  for word in word_freq_table.values():
-    put_word_in_merge_freq_table(starter_vocab, token_pair_freq_table, word, word_freq_table[word], words_containing)
+  # Initialize the merge freq table by doing 2 things:
+  # 1. count the pair by adding the word frequency to token_pair_freq_table.
+  # 2. add the word to the words containing the pair, using the words_containing map.
+  for word, freq in word_freq_table.items():
+    initialize_word(word, freq, token_pair_freq_table, words_containing_pair)
 
   # Convert the frequency table to a priority queue of TokenPair objects.
-  token_pair_pq = TokenPairPQ([TokenPair(first, second, freq) for (first, second), freq in token_pair_freq_table.items()])
+  token_pair_pq = TokenPairPQ([
+    TokenPair(first, second, freq)
+       for (first, second), freq 
+       in token_pair_freq_table.items()
+       ])
 
   for _ in tqdm(range(steps), desc="Merge"):
 
@@ -117,13 +127,13 @@ def merge(starter_vocab: Vocab, word_freq_table: Counter[Word], steps: int) -> t
     # Record the merge operation for testing; nothing is really being merged now.
     merge_sequence.append((most_frequent_pair[0], most_frequent_pair[1]))
 
-    # Record as a new word in the final vocabulary.
+    # Record a new word in the final vocabulary.
     new_words.append(merged_most_frequent_pair)
 
     # store words to be merged, and record each operations of 
     # "replacing the original word, and tranfer its frequency to the new word".
     operations = [] 
-    for word in words_containing[TokenPair]: # Update the words that contain the most frequent pair.
+    for word in words_containing_pair[TokenPair]: # Update the words that contain the most frequent pair.
       # Store the indices of the pair with max frequency, instead of doing the merge in-place.
       indices_appeareance = [i for i in range(len(word) - 1) if word[i:i + 2] == most_frequent_pair]
       # Commit all merges for this word.
@@ -146,11 +156,11 @@ def merge(starter_vocab: Vocab, word_freq_table: Counter[Word], steps: int) -> t
       word_freq_table[new_word] = word_freq_table.get(new_word, 0) + appearances 
       del word_freq_table[word]
 
-  return (dict(enumerate(STARTER_VOCABULARY + new_words)), merge_sequence)
+  return (dict(enumerate(starter_vocab + new_words)), merge_sequence)
 
 # Initialization
 start_time = time.time()
-vocab = {i: bytes([i]) for i in range(256)}
+vocab: Vocab = {i: bytes([i]) for i in range(256)}
 PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
 compiled_PAT = re.compile(PAT)
 
@@ -194,7 +204,7 @@ print(f"Initialization time: {time.time() - start_time:.2f} seconds")
 start_time = time.time()
 # Simulates parallel pre-tokenization. todo: implement using multiprocessing.
 for task in tasks:
-    frequency_table = pre_tokenize_and_count(task)
+  frequency_table = pre_tokenize_and_count(task)
 print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
 
 start_time = time.time()
