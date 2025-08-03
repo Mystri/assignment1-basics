@@ -14,7 +14,9 @@ def test_softmax_matches_pytorch():
         ]
     )
     expected = F.softmax(x, dim=-1)
-    numpy.testing.assert_allclose(run_softmax(x, dim=-1).detach().numpy(), expected.detach().numpy(), atol=1e-6)
+    numpy.testing.assert_allclose(
+        run_softmax(x, dim=-1).detach().numpy(), expected.detach().numpy(), atol=1e-6
+    )
     # Test that softmax handles numerical overflow issues
     numpy.testing.assert_allclose(
         run_softmax(x + 100, dim=-1).detach().numpy(),
@@ -43,16 +45,24 @@ def test_cross_entropy():
     targets = torch.tensor([[1, 0, 2, 2], [4, 1, 4, 0]])
     expected = F.cross_entropy(inputs.view(-1, inputs.size(-1)), targets.view(-1))
     numpy.testing.assert_allclose(
-        run_cross_entropy(inputs.view(-1, inputs.size(-1)), targets.view(-1)).detach().numpy(),
+        run_cross_entropy(inputs.view(-1, inputs.size(-1)), targets.view(-1))
+        .detach()
+        .numpy(),
         expected.detach().numpy(),
         atol=1e-4,
     )
 
     # Test that cross-entropy handles numerical overflow issues
     large_inputs = 1000.0 * inputs
-    large_expected_cross_entropy = F.cross_entropy(large_inputs.view(-1, large_inputs.size(-1)), targets.view(-1))
+    large_expected_cross_entropy = F.cross_entropy(
+        large_inputs.view(-1, large_inputs.size(-1)), targets.view(-1)
+    )
     numpy.testing.assert_allclose(
-        run_cross_entropy(large_inputs.view(-1, large_inputs.size(-1)), targets.view(-1)).detach().numpy(),
+        run_cross_entropy(
+            large_inputs.view(-1, large_inputs.size(-1)), targets.view(-1)
+        )
+        .detach()
+        .numpy(),
         large_expected_cross_entropy.detach().numpy(),
         atol=1e-4,
     )

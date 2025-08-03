@@ -12,7 +12,13 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from cs336_basics.bpe.tokenizer_prototypes import EOT, PAT, STARTER_VOCABULARY, pretokenize_dummy_tuple_bytes, merge_dummy
+from cs336_basics.bpe.tokenizer_prototypes import (
+    EOT,
+    PAT,
+    STARTER_VOCABULARY,
+    pretokenize_dummy_tuple_bytes,
+    merge_dummy,
+)
 
 
 def run_linear(
@@ -29,7 +35,7 @@ def run_linear(
         out_dim (int): The size of the output dimension
         weights (Float[Tensor, "d_out d_in"]): The linear weights to use
         in_features (Float[Tensor, "... d_in"]): The output tensor to apply the function to
-    
+
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
@@ -51,7 +57,7 @@ def run_embedding(
         d_model (int): The size of the embedding dimension
         weights (Float[Tensor, "vocab_size d_model"]): The embedding vectors to fetch from
         token_ids (Int[Tensor, "..."]): The set of token ids to fetch from the Embedding layer
-    
+
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
@@ -306,7 +312,7 @@ def run_transformer_lm(
             evenly divisible by `num_heads`.
         d_ff (int): Dimensionality of the feed-forward inner layer (section 3.3).
         rope_theta (float): The RoPE $\Theta$ parameter.
-        weights (dict[str, Tensor]): 
+        weights (dict[str, Tensor]):
             State dict of our reference implementation. {num_layers} refers to an
             integer between `0` and `num_layers - 1` (the layer index).
             The keys of this dictionary are:
@@ -439,7 +445,9 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
     raise NotImplementedError
 
 
-def run_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]) -> Float[Tensor, ""]:
+def run_cross_entropy(
+    inputs: Float[Tensor, " batch_size vocab_size"], targets: Int[Tensor, " batch_size"]
+) -> Float[Tensor, ""]:
     """Given a tensor of inputs and targets, compute the average cross-entropy
     loss across examples.
 
@@ -455,7 +463,9 @@ def run_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: 
     raise NotImplementedError
 
 
-def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
+def run_gradient_clipping(
+    parameters: Iterable[torch.nn.Parameter], max_l2_norm: float
+) -> None:
     """Given a set of parameters, clip their combined gradients to have l2 norm at most max_l2_norm.
 
     Args:
@@ -593,9 +603,9 @@ def run_train_bpe(
                 Merges are ordered by order of creation.
     """
     pretokenization1 = None
-    with open(rf'{input_path}', 'r', encoding='utf-8') as file:
+    with open(rf"{input_path}", "r", encoding="utf-8") as file:
         content = file.read()
-    
+
         pretokenization1 = pretokenize_dummy_tuple_bytes(content, [EOT])
         # print(f'Dummy Pretokenization result: ${pretokenization}')
         # print(f'Merge result - New words: {new_words}')
@@ -609,18 +619,20 @@ def run_train_bpe(
         l = list(word.encode("utf-8"))
         l = [bytes([x]) for x in l]
         return tuple(l)
-    
+
     chunks = re.split("|".join(map(re.escape, special_tokens)), text)
-    
+
     for chunk in tqdm(chunks, desc="Pretokenize"):
         for m in re.finditer(PAT, chunk):
             word = m.group(0)
-            pretokenization[to_bytes_tuple(word)] += 1   # key of pre_tokens_cnt
+            pretokenization[to_bytes_tuple(word)] += 1  # key of pre_tokens_cnt
 
     assert pretokenization == pretokenization1
-    
-    print(f'Dummy Pretokenization result: ${pretokenization}')
-    vocab, merge_sequence = merge_dummy(pretokenization, vocab_size - len(STARTER_VOCABULARY))
-    print(f'Merge result - New words: {new_words}')
-    
+
+    print(f"Dummy Pretokenization result: ${pretokenization}")
+    vocab, merge_sequence = merge_dummy(
+        pretokenization, vocab_size - len(STARTER_VOCABULARY)
+    )
+    print(f"Merge result - New words: {new_words}")
+
     return (vocab, merge_sequence)
