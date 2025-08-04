@@ -22,6 +22,16 @@
       "justMyCode": true,
     },
     {
+      "name": "Pytest test_train_bpe.py::test_train_bpe",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "tests/test_train_bpe.py::test_train_bpe"
+      ],
+      "justMyCode": true,
+    },
+    {
       "name": "Pytest test_train_bpe.py all",
       "type": "debugpy",
       "request": "launch",
@@ -30,14 +40,6 @@
         "tests/test_train_bpe.py"
       ],
       "justMyCode": true,
-    },
-    {
-      "name": "Python: Current File",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
-      "justMyCode": true
     }
   ]
 }

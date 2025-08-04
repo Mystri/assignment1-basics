@@ -67,6 +67,9 @@ class TokenPair:
     def get_merged_bytes(self, vocab: dict[int, bytes]) -> bytes:
         return vocab[self.first] + vocab[self.second]
 
+    def get_merged_pair_bytes(self, vocab: dict[int, bytes]) -> tuple[bytes, bytes]:
+        return (vocab[self.first], vocab[self.second])
+
 
 class TokenPairPQ:
     def __init__(self, token_pairs: list[TokenPair] = []):
@@ -107,9 +110,9 @@ def initialize_word(
 # Merge.
 def merge(
     starter_vocab: Vocab, word_freq_table: Counter[Word], steps: int
-) -> tuple[dict[int, int], list[tuple[bytes, bytes]]]:
+) -> tuple[Vocab, list[TokenPair]]:
     new_words: list[TokenPair] = []
-    merge_sequence = []
+    merge_sequence: list[TokenPair] = []
 
     # Initialize the frequency table for token pairs.
     # Store tokenpair objects to quickly create the Priority Queue.
@@ -132,7 +135,7 @@ def merge(
         most_frequent_pair = token_pair_pq.pop()
 
         # Record the merge operation for testing; nothing is really being merged now.
-        merge_sequence.append((most_frequent_pair.first, most_frequent_pair.second))
+        merge_sequence.append(most_frequent_pair)
 
         # Record a new word in the final vocabulary.
         new_words.append(most_frequent_pair)
