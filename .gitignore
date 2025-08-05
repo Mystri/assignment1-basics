@@ -165,4 +165,4 @@ cython_debug/
 # Ignore data files
 /data/
 # Ignore output files from BPE training
-cs336_basics/bpe/output/
+cs336_basics/bpe/output/*.txt
