@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from cs336_basics.bpe.multiprocessing_prototype import train_bpe
+from cs336_basics.bpe.train_bpe import train_bpe
 
 def run_linear(
     d_in: int,
