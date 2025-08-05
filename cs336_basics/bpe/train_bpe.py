@@ -441,24 +441,45 @@ def train_bpe(
 
 
 def train_bpe_tinystories():
-    input_path = f"{os.getcwd()}/data/tinystories_sample.txt"
-    vocab_size = 1000
+    input_path = f"{os.getcwd()}/data/TinyStoriesV2-GPT4-train.txt"
+    vocab_size = 10000
     special_tokens = ["<|endoftext|>"]
 
     vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
 
     # Save the vocabulary and merges to files.
-    with open("cs336_basics/bpe/output/vocab.txt", "wb") as f:
-        for token_id, token_bytes in vocab.items():
-            f.write(f"{token_id}\t{token_bytes}\n".encode("utf-8"))
+    write_merges(merges, "cs336_basics/bpe/output/merges_tinystories.pkl")
+    write_vocab(vocab, "cs336_basics/bpe/output/vocab_tinystories.pkl")
 
-    with open("cs336_basics/bpe/output/merges.txt", "wb") as f:
-        for merge in merges:
-            f.write(
-                f"{merge[0]} {merge[1]}\n".encode(
-                    "utf-8"
-                )
-            )
+def train_bpe_expts_owt():
+    input_path = f"{os.getcwd()}/data/owt_train.txt"
+    vocab_size = 32000
+    special_tokens = ["<|endoftext|>"]
+
+    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+
+    # Save the vocabulary and merges to files.
+    write_merges(merges, "cs336_basics/bpe/output/merges_owt.pkl")
+    write_vocab(vocab, "cs336_basics/bpe/output/vocab_owt.pkl")
+
+def write_merges(merges, outpath):
+    """Pickle the merges list to a binary file."""
+    os.makedirs(os.path.dirname(outpath), exist_ok=True)
+    with open(outpath, "wb") as f:
+        pickle.dump(merges, f)
+    print(f"Saved {len(merges)} merges to {outpath}")
+
+
+def write_vocab(vocab, outpath):
+    """Pickle the vocab dict to a binary file."""
+    os.makedirs(os.path.dirname(outpath), exist_ok=True)
+    with open(outpath, "wb") as f:
+        pickle.dump(vocab, f)
+    print(f"Saved vocabulary with {len(vocab)} tokens to {outpath}")
             
 if __name__ == "__main__":
+    # Example usage
     train_bpe_tinystories()
+    print("BPE training for tinystories completed.")
+    train_bpe_expts_owt()
+    print("BPE training for OWT completed.")
