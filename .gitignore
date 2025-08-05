@@ -162,4 +162,7 @@ cython_debug/
 .ruff_cache/
 *.zip
 
-/data
+# Ignore data files
+/data/
+# Ignore output files from BPE training
+cs336_basics/bpe/output/

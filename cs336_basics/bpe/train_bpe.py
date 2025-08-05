@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 import heapq
 from multiprocessing import Pool
 import os
+import pickle
 import time
 from typing import BinaryIO
 import regex as re
@@ -72,10 +73,10 @@ def pre_tokenize_and_count(tasks: list[Task], num_processes) -> Counter[Word]:
 
         results = pool.imap_unordered(pretokenize_executor, tasks)
 
-        for pretokenization_chunk_result in results:
+        for pretokenization_chunk_result in tqdm(results, total=len(tasks), desc="Pre-tokenizing by chunks:"):
             print(len(pretokenization_chunk_result), "words found in chunk")
             word_freq_table.update(pretokenization_chunk_result)
-            
+
     return word_freq_table
 
 
@@ -252,7 +253,7 @@ def merge(
 
     result_vocab = starter_vocab.copy()
 
-    for _ in tqdm(range(steps), desc="Merge"):
+    for _ in tqdm(range(steps), desc="Merging:"):
 
         # Pop the priority queue until we find a valid pair.
         best_pq_entry = None
@@ -378,7 +379,7 @@ def train_bpe(
     PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
     compiled_PAT = re.compile(PAT)
     starter_vocab: Vocab = {i: bytes([i]) for i in range(256)}
-    num_processes = os.cpu_count()
+    num_processes = os.cpu_count() - 2
 
     special_tokens = ["<|endoftext|>"]
     # Add special tokens to vocabulary.
@@ -437,3 +438,27 @@ def train_bpe(
     ]
 
     return starter_vocab, merge_result
+
+
+def train_bpe_tinystories():
+    input_path = f"{os.getcwd()}/data/tinystories_sample.txt"
+    vocab_size = 1000
+    special_tokens = ["<|endoftext|>"]
+
+    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+
+    # Save the vocabulary and merges to files.
+    with open("cs336_basics/bpe/output/vocab.txt", "wb") as f:
+        for token_id, token_bytes in vocab.items():
+            f.write(f"{token_id}\t{token_bytes}\n".encode("utf-8"))
+
+    with open("cs336_basics/bpe/output/merges.txt", "wb") as f:
+        for merge in merges:
+            f.write(
+                f"{merge[0]} {merge[1]}\n".encode(
+                    "utf-8"
+                )
+            )
+            
+if __name__ == "__main__":
+    train_bpe_tinystories()
