@@ -183,6 +183,7 @@ def merge(
                 entry.frequency
                 == token_pair_freq_table[token_pair]
             ):
+                most_frequent_pair = entry
                 break
         if most_frequent_pair is None:
             break
@@ -294,15 +295,15 @@ with open(file, "rb") as f:
 
 print(f"Initialization time: {time.time() - start_time:.2f} seconds")
 
-start_time = time.time()
-# Simulates parallel pre-tokenization. todo: implement using multiprocessing.
-word_freq_table = Counter()
-for task in tasks:
-    word_freq_table.update(pre_tokenize_and_count(task))
-print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
+# start_time = time.time()
+# # Simulates parallel pre-tokenization. todo: implement using multiprocessing.
+# word_freq_table = Counter()
+# for task in tasks:
+#     word_freq_table.update(pre_tokenize_and_count(task))
+# print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
 
-start_time = time.time()
+# start_time = time.time()
 
-# Merge, which is not parallelizable.
-vocab, merges = merge(vocab, word_freq_table, steps=100)
-print(f"Merging time: {time.time() - start_time:.2f} seconds")
+# # Merge, which is not parallelizable.
+# vocab, merges = merge(vocab, word_freq_table, steps=100)
+# print(f"Merging time: {time.time() - start_time:.2f} seconds")
