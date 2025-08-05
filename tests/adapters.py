@@ -630,12 +630,14 @@ def run_train_bpe(
         for m in re.finditer(PAT, chunk):
             word = m.group(0)
             pretokenization_ref[to_bytes_tuple(word)] += 1  # key of pre_tokens_cnt
+    # end of reference pretokenization
 
     # Initialization
     start_time = time.time()
     vocab: Vocab = {i: bytes([i]) for i in range(256)}
 
     num_processes = max(os.cpu_count() - 2, 4)
+    # num_processes = 1  # For now, we run in a single process. 
     merge_steps = vocab_size - len(STARTER_VOCABULARY)
 
     special_tokens = ["<|endoftext|>"]
@@ -653,18 +655,14 @@ def run_train_bpe(
         [t.encode("utf-8") for t in special_tokens], key=len, reverse=True
     )
     escaped_tokens = [re.escape(t.decode("utf-8")) for t in special_tokens_sorted]
-    special_tokens_regex = "|".join(escaped_tokens)
+    special_tokens_regex = "|".join(escaped_tokens).encode("utf-8")
     if special_tokens_regex:
         special_token_pattern = re.compile(f"({special_tokens_regex})")
 
-    # Create a reference vocabulary for special tokens
-    special_token_to_id = {token: i for i, token in enumerate(special_tokens)}
-
     tasks = []
     with open(input_path, "rb") as f:
-        before_pretokenization_time = time.time()
         boundaries = find_chunk_boundaries(
-            f, num_processes, "<|endoftext|>".encode("utf-8")
+            f, num_processes, special_tokens_regex
         )
 
         # Create a list of tasks, for each chunk.
@@ -689,6 +687,19 @@ def run_train_bpe(
         word_freq_table.update(pre_tokenize_and_count(task))
     print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
 
+    word_freq_table_bytes = defaultdict(int)
+
+    for word, count in word_freq_table.items():
+        word_bytes = tuple([vocab[x] for x in word])
+        word_freq_table_bytes[word_bytes] += count
+
+    
+    for i, pair in enumerate(zip(sorted(word_freq_table_bytes.items()), sorted(pretokenization_ref.items()))):
+        if pair[0] == pair[1]:
+            continue
+        else: 
+            print(f"Mismatch at index {i}: {pair[0]} != {pair[1]}")
+    
     start_time = time.time()
 
     # Merge, which is not parallelizable.

@@ -1,9 +1,6 @@
 import regex as re
 
-text = """Lucy was so happy and excited. She picked the prettiest flowers and took them home to show her mommy. When Mommy saw the flowers, she said they were very yummy. Lucy was so glad she could make her mommy happy! 
-
-<|endoftext|>
-Once upon a time,"""
+text = "asdjlkfasf\r\n<|endoftext|>\r\nOnce upon a time,"
 print(f"text: '{text}'")
 
 # Special token added to front
@@ -27,5 +24,5 @@ print([m.group() for m in re_with_specials.finditer(text)])
 
 text_split = text.split(special_token)
 print("\n🔸 Pattern WITHOUT special tokens")
-for t in text_split:
-    print([m.group() for m in re_without_specials.finditer()])
+for part in text_split:
+    print([m.group() for m in re_without_specials.finditer(part)])

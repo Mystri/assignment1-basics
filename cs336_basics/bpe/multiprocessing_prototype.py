@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer_prototypes import find_chunk_boundaries
 
-num_processes = 8  # Example number of processes
+num_processes = 1  # Example number of processes
 
 # Typedefs
 Token = int  # Token is represented by an integer index in the vocabulary.
@@ -15,7 +15,7 @@ Vocab = dict[int, bytes]
 
 
 def pre_tokenize_and_count(
-    task: tuple[bytes, dict[str, int], re.Pattern, re.Pattern],
+    task: tuple[bytes, dict[str, int], re.Pattern, str],
 ) -> Counter[Word]:
     """
     Pre-tokenizes a chunk of text and counts the frequency of each word or special token.
@@ -25,7 +25,7 @@ def pre_tokenize_and_count(
     special_tokens = set(special_token_vocabulary.keys())
 
     words_list: list[Word] = []
-
+    
     # Split the text by the special tokens.
     if special_tokens_regex:
         pieces = special_tokens_regex.split(text)
@@ -185,6 +185,7 @@ start_time = time.time()
 vocab: Vocab = {i: bytes([i]) for i in range(256)}
 PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
 compiled_PAT = re.compile(PAT)
+file = "tests/fixtures/tinystories_sample.txt"
 
 special_tokens = ["<|endoftext|>"]
 # Add special tokens to vocabulary.
@@ -209,8 +210,9 @@ if special_tokens_regex:
 special_token_to_id = {token: i for i, token in enumerate(special_tokens)}
 
 tasks = []
-with open("tests/fixtures/tinystories_sample.txt", "rb") as f:
+with open(file, "rb") as f:
     before_pretokenization_time = time.time()
+
     boundaries = find_chunk_boundaries(
         f, num_processes, "<|endoftext|>".encode("utf-8")
     )
