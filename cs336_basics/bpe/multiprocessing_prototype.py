@@ -15,7 +15,7 @@ Vocab = dict[int, bytes]
 
 
 def pre_tokenize_and_count(
-    task: tuple[bytes, dict[str, int], re.Pattern, str],
+    task: tuple[bytes, dict[str, int], re.Pattern, re.Pattern],
 ) -> Counter[Word]:
     """
     Pre-tokenizes a chunk of text and counts the frequency of each word or special token.
@@ -147,7 +147,6 @@ def initialize_word(
 def merge(
     starter_vocab: Vocab, word_freq_table: Counter[Word], steps: int
 ) -> tuple[Vocab, list[PQEntry]]:
-    new_words: list[PQEntry] = []
     merge_sequence: list[PQEntry] = []
 
     # Initialize the frequency table for token pairs.
@@ -166,7 +165,6 @@ def merge(
         initialize_word(word, freq, token_pair_freq_table, pair_occurrences_in_words)
 
     token_pair_freq_table_ref = {}
-    merge_freq_table = defaultdict(int)
 
     def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
         for i in range(len(word) - 1):
@@ -182,7 +180,7 @@ def merge(
     # Convert the frequency table to a priority queue of TokenPair objects.
     token_pair_pq = TokenPairPQ(
         [
-            PQEntry(pair[0], pair[1], vocab[pair[0]], vocab[pair[1]], freq)
+            PQEntry(pair[0], pair[1], starter_vocab[pair[0]], starter_vocab[pair[1]], freq)
             for pair, freq in token_pair_freq_table.items()
         ]
     )

@@ -632,17 +632,11 @@ def run_train_bpe(
             special_token_reference_vocabulary[token] = len(vocab) - 1
 
     # Create a splitter of text, by the special tokens
-    special_tokens_sorted = sorted(
-        [t.encode("utf-8") for t in special_tokens], key=len, reverse=True
-    )
-    escaped_tokens = [re.escape(t.decode("utf-8")) for t in special_tokens_sorted]
-    special_tokens_regex = "|".join(escaped_tokens).encode("utf-8")
-    if special_tokens_regex:
-        special_token_pattern = re.compile(f"({special_tokens_regex})")
+    special_pattern = re.compile("|".join(re.escape(tok) for tok in special_tokens)) if special_tokens else None
 
     tasks = []
     with open(input_path, "rb") as f:
-        boundaries = find_chunk_boundaries(f, num_processes, special_tokens_regex)
+        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         # Create a list of tasks, for each chunk.
         for start, end in zip(boundaries[:-1], boundaries[1:]):
@@ -652,7 +646,7 @@ def run_train_bpe(
                 (
                     chunk.encode("utf-8"),
                     special_token_reference_vocabulary,
-                    special_token_pattern,
+                    special_pattern,
                     compiled_PAT,
                 )
             )
