@@ -117,6 +117,7 @@ def initialize_word(
         new_node.prev = cursor
         cursor = new_node
     
+    dummy_node.next.prev = None  # Remove the reference of 1st word node pointing to dummy node after creation.
     cursor = dummy_node.next
     
     # Traverse each pair in the word.
