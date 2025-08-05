@@ -610,39 +610,20 @@ def run_train_bpe(
     """
 
     # TODO: remove the reference tokenizer and put this back to proper initialization.
-    PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
-    compiled_PAT = re.compile(PAT)
-
-    # Reference implementation of pretokenizer.
-    pretokenization_ref = defaultdict(int)
-
-    with open(input_path, "r", encoding="utf-8") as f:
-        text = f.read()
-
-    def to_bytes_tuple(word: str) -> Tuple[bytes]:
-        l = list(word.encode("utf-8"))
-        l = [bytes([x]) for x in l]
-        return tuple(l)
-
-    chunks = re.split("|".join(map(re.escape, special_tokens)), text)
-
-    for chunk in tqdm(chunks, desc="Pretokenize"):
-        for m in re.finditer(PAT, chunk):
-            word = m.group(0)
-            pretokenization_ref[to_bytes_tuple(word)] += 1  # key of pre_tokens_cnt
-    # end of reference pretokenization
 
     # Initialization
+    PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
+    compiled_PAT = re.compile(PAT)
     start_time = time.time()
     vocab: Vocab = {i: bytes([i]) for i in range(256)}
 
     num_processes = max(os.cpu_count() - 2, 4)
-    # num_processes = 1  # For now, we run in a single process. 
+    # num_processes = 1  # For now, we run in a single process.
     merge_steps = vocab_size - len(STARTER_VOCABULARY)
 
     special_tokens = ["<|endoftext|>"]
     # Add special tokens to vocabulary.
-    # Also create a mapping from special token to its ID.
+    # Also create a mapping from a special token to its ID.
     special_token_reference_vocabulary = {}
     for token in special_tokens:
         token_bytes = token.encode("utf-8")
@@ -661,9 +642,7 @@ def run_train_bpe(
 
     tasks = []
     with open(input_path, "rb") as f:
-        boundaries = find_chunk_boundaries(
-            f, num_processes, special_tokens_regex
-        )
+        boundaries = find_chunk_boundaries(f, num_processes, special_tokens_regex)
 
         # Create a list of tasks, for each chunk.
         for start, end in zip(boundaries[:-1], boundaries[1:]):
@@ -677,7 +656,7 @@ def run_train_bpe(
                     compiled_PAT,
                 )
             )
-
+    # End of initialization
     print(f"Initialization time: {time.time() - start_time:.2f} seconds")
 
     start_time = time.time()
@@ -687,19 +666,6 @@ def run_train_bpe(
         word_freq_table.update(pre_tokenize_and_count(task))
     print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
 
-    word_freq_table_bytes = defaultdict(int)
-
-    for word, count in word_freq_table.items():
-        word_bytes = tuple([vocab[x] for x in word])
-        word_freq_table_bytes[word_bytes] += count
-
-    
-    for i, pair in enumerate(zip(sorted(word_freq_table_bytes.items()), sorted(pretokenization_ref.items()))):
-        if pair[0] == pair[1]:
-            continue
-        else: 
-            print(f"Mismatch at index {i}: {pair[0]} != {pair[1]}")
-    
     start_time = time.time()
 
     # Merge, which is not parallelizable.
