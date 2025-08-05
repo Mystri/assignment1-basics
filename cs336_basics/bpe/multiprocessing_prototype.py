@@ -1,22 +1,85 @@
 from collections import Counter, defaultdict
 import heapq
+from multiprocessing import Pool
+import os
 import time
+from typing import BinaryIO
 import regex as re
 from tqdm import tqdm
 
-from cs336_basics.bpe.tokenizer_prototypes import find_chunk_boundaries
-
-num_processes = 1  # Example number of processes
 
 # Typedefs
 Token = int  # Token is represented by an integer index in the vocabulary.
 Word = tuple[Token]  # Represents that a word is a sequence of tokens.
 Vocab = dict[int, bytes]
+Task = tuple[bytes, dict[str, int], re.Pattern, re.Pattern]
 
 
-def pre_tokenize_and_count(
-    task: tuple[bytes, dict[str, int], re.Pattern, re.Pattern],
-) -> Counter[Word]:
+def find_chunk_boundaries(
+    file: BinaryIO, desired_num_chunks: int, split_special_token: bytes
+) -> list[int]:
+    """
+    Chunk the file into parts that can be counted independently.
+    May return fewer chunks if the boundaries end up overlapping.
+    """
+    assert isinstance(
+        split_special_token, bytes
+    ), "Must represent special token as a bytestring"
+
+    # Get total file size in bytes
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+
+    chunk_size = file_size // desired_num_chunks
+
+    # Initial guesses for chunk boundary locations, uniformly spaced
+    # Chunks start on previous index, don't include last index
+    chunk_boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
+    chunk_boundaries[-1] = file_size
+
+    mini_chunk_size = 4096  # Read ahead by 4k bytes at a time
+
+    for bi in range(1, len(chunk_boundaries) - 1):
+        initial_position = chunk_boundaries[bi]
+        file.seek(initial_position)  # Start at boundary guess
+        while True:
+            mini_chunk = file.read(mini_chunk_size)  # Read a mini chunk
+
+            # If EOF, this boundary should be at the end of the file
+            if mini_chunk == b"":
+                chunk_boundaries[bi] = file_size
+                break
+
+            # Find the special token in the mini chunk
+            found_at = mini_chunk.find(split_special_token)
+            if found_at != -1:
+                chunk_boundaries[bi] = initial_position + found_at
+                break
+            # Move to the end of mini chunk if
+            initial_position += mini_chunk_size
+
+    # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
+    return sorted(set(chunk_boundaries))
+
+
+def pre_tokenize_and_count(tasks: list[Task], num_processes) -> Counter[Word]:
+    """
+    Pre-tokenizes a list of tasks and counts the frequency of each word or special token.
+    """
+    word_freq_table = Counter()
+    with Pool(processes=num_processes) as pool:
+
+        results = pool.imap_unordered(pretokenize_executor, tasks)
+
+        for pretokenization_chunk_result in results:
+            print(len(pretokenization_chunk_result), "words found in chunk")
+            word_freq_table.update(pretokenization_chunk_result)
+            
+    return word_freq_table
+
+
+def pretokenize_executor(task: Task) -> Counter[Word]:
     """
     Pre-tokenizes a chunk of text and counts the frequency of each word or special token.
     """
@@ -180,7 +243,9 @@ def merge(
     # Convert the frequency table to a priority queue of TokenPair objects.
     token_pair_pq = TokenPairPQ(
         [
-            PQEntry(pair[0], pair[1], starter_vocab[pair[0]], starter_vocab[pair[1]], freq)
+            PQEntry(
+                pair[0], pair[1], starter_vocab[pair[0]], starter_vocab[pair[1]], freq
+            )
             for pair, freq in token_pair_freq_table.items()
         ]
     )
@@ -300,43 +365,45 @@ def merge(
 
     return (result_vocab, merge_sequence)
 
-if __name__ == "__main__":
-    # Initialization
+
+def train_bpe(
+    input_path: str | os.PathLike,
+    vocab_size: int,
+    special_tokens: list[str],
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+
     start_time = time.time()
-    vocab: Vocab = {i: bytes([i]) for i in range(256)}
+
+    # Initialization
     PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
     compiled_PAT = re.compile(PAT)
-    file = "tests/fixtures/tinystories_sample.txt"
+    starter_vocab: Vocab = {i: bytes([i]) for i in range(256)}
+    num_processes = os.cpu_count()
 
     special_tokens = ["<|endoftext|>"]
     # Add special tokens to vocabulary.
-    # Also create a mapping from special token to its ID.
+    # Also create a mapping from a special token to its ID.
     special_token_reference_vocabulary = {}
     for token in special_tokens:
         token_bytes = token.encode("utf-8")
-        if token_bytes not in vocab.values():
-            vocab[len(vocab)] = token_bytes
-            special_token_reference_vocabulary[token] = len(vocab) - 1
+        if token_bytes not in starter_vocab.values():
+            starter_vocab[len(starter_vocab)] = token_bytes
+            special_token_reference_vocabulary[token] = len(starter_vocab) - 1
 
     # Create a splitter of text, by the special tokens
-    special_tokens_sorted = sorted(
-        [t.encode("utf-8") for t in special_tokens], key=len, reverse=True
+    special_pattern = (
+        re.compile("|".join(re.escape(tok) for tok in special_tokens))
+        if special_tokens
+        else None
     )
-    escaped_tokens = [re.escape(t.decode("utf-8")) for t in special_tokens_sorted]
-    special_tokens_regex = "|".join(escaped_tokens)
-    if special_tokens_regex:
-        special_token_pattern = re.compile(f"({special_tokens_regex})")
 
-    # Create a reference vocabulary for special tokens
-    special_token_to_id = {token: i for i, token in enumerate(special_tokens)}
+    # End of initialization
+    print(f"Initialization time: {time.time() - start_time:.2f} seconds")
 
+    start_time = time.time()
     tasks = []
-    with open(file, "rb") as f:
-        before_pretokenization_time = time.time()
-
-        boundaries = find_chunk_boundaries(
-            f, num_processes, "<|endoftext|>".encode("utf-8")
-        )
+    with open(input_path, "rb") as f:
+        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         # Create a list of tasks, for each chunk.
         for start, end in zip(boundaries[:-1], boundaries[1:]):
@@ -346,22 +413,27 @@ if __name__ == "__main__":
                 (
                     chunk.encode("utf-8"),
                     special_token_reference_vocabulary,
-                    special_token_pattern,
+                    special_pattern,
                     compiled_PAT,
                 )
             )
-
-    print(f"Initialization time: {time.time() - start_time:.2f} seconds")
+    # End of task creation
+    print(
+        f"Pretokenization chunk creation time: {time.time() - start_time:.2f} seconds"
+    )
 
     start_time = time.time()
-    # Simulates parallel pre-tokenization. todo: implement using multiprocessing.
-    word_freq_table = Counter()
-    for task in tasks:
-        word_freq_table.update(pre_tokenize_and_count(task))
+    word_freq_table = pre_tokenize_and_count(tasks, min(num_processes, len(tasks)))
     print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
 
     start_time = time.time()
 
     # Merge, which is not parallelizable.
-    vocab, merges = merge(vocab, word_freq_table, steps=100)
+    merge_steps = vocab_size - len(starter_vocab)
+    starter_vocab, merges = merge(starter_vocab, word_freq_table, merge_steps)
     print(f"Merging time: {time.time() - start_time:.2f} seconds")
+    merge_result = [
+        (starter_vocab[token1], starter_vocab[token2]) for token1, token2 in merges
+    ]
+
+    return starter_vocab, merge_result

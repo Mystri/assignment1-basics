@@ -13,19 +13,7 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from cs336_basics.bpe.multiprocessing_prototype import (
-    Vocab,
-    merge,
-    pre_tokenize_and_count,
-)
-from cs336_basics.bpe.tokenizer_prototypes import (
-    EOT,
-    STARTER_VOCABULARY,
-    find_chunk_boundaries,
-    pretokenize_dummy_tuple_bytes,
-    merge_dummy,
-)
-
+from cs336_basics.bpe.multiprocessing_prototype import train_bpe
 
 def run_linear(
     d_in: int,
@@ -608,65 +596,4 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-
-    # TODO: remove the reference tokenizer and put this back to proper initialization.
-
-    # Initialization
-    PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
-    compiled_PAT = re.compile(PAT)
-    start_time = time.time()
-    vocab: Vocab = {i: bytes([i]) for i in range(256)}
-
-    num_processes = max(os.cpu_count() - 2, 4)
-    # num_processes = 1  # For now, we run in a single process.
-    merge_steps = vocab_size - len(STARTER_VOCABULARY)
-
-    special_tokens = ["<|endoftext|>"]
-    # Add special tokens to vocabulary.
-    # Also create a mapping from a special token to its ID.
-    special_token_reference_vocabulary = {}
-    for token in special_tokens:
-        token_bytes = token.encode("utf-8")
-        if token_bytes not in vocab.values():
-            vocab[len(vocab)] = token_bytes
-            special_token_reference_vocabulary[token] = len(vocab) - 1
-
-    # Create a splitter of text, by the special tokens
-    special_pattern = re.compile("|".join(re.escape(tok) for tok in special_tokens)) if special_tokens else None
-
-    tasks = []
-    with open(input_path, "rb") as f:
-        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-
-        # Create a list of tasks, for each chunk.
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
-            tasks.append(
-                (
-                    chunk.encode("utf-8"),
-                    special_token_reference_vocabulary,
-                    special_pattern,
-                    compiled_PAT,
-                )
-            )
-    # End of initialization
-    print(f"Initialization time: {time.time() - start_time:.2f} seconds")
-
-    start_time = time.time()
-    # Simulates parallel pre-tokenization. todo: implement using multiprocessing.
-    word_freq_table = Counter()
-    for task in tasks:
-        word_freq_table.update(pre_tokenize_and_count(task))
-    print(f"Pre-tokenization time: {time.time() - start_time:.2f} seconds")
-
-    start_time = time.time()
-
-    # Merge, which is not parallelizable.
-    vocab, merges = merge(vocab, word_freq_table, merge_steps)
-    print(f"Merging time: {time.time() - start_time:.2f} seconds")
-    merge_result = [
-        merge_record.get_merged_pair_bytes(vocab) for merge_record in merges
-    ]
-
-    return (vocab, merge_result)
+    return train_bpe(input_path, vocab_size, special_tokens)
