@@ -52,16 +52,18 @@ def pre_tokenize_and_count(
 
 
 class PQEntry:
-    def __init__(self, first: Token, second: Token, frequency: int):
+    def __init__(self, first: Token, second: Token, first_bytes, second_bytes, frequency: int):
         self.first = first
         self.second = second
+        self.first_bytes = first_bytes
+        self.second_bytes = second_bytes
         self.frequency = frequency
 
     def __lt__(self, other):
         # Compare by frequency first, then lexicographically by the pairs.
         # Uses greaterthan for max-heap behavior.
         if self.frequency == other.frequency:
-            return (self.first, self.second) > (other.first, other.second)
+            return (self.first_bytes, self.second_bytes) > (other.first_bytes, other.second_bytes)
         return self.frequency > other.frequency
 
     def get_merged_bytes(self, vocab: dict[int, bytes]) -> bytes:
@@ -69,6 +71,9 @@ class PQEntry:
 
     def get_merged_pair_bytes(self, vocab: dict[int, bytes]) -> tuple[bytes, bytes]:
         return (vocab[self.first], vocab[self.second])
+    
+    def get_token_pair(self) -> tuple[Token, Token]:
+        return (self.first, self.second)
 
 
 class TokenPairPQ:
@@ -78,10 +83,9 @@ class TokenPairPQ:
 
     def push(self, token_pair: PQEntry):
         heapq.heappush(self.pq, token_pair)
-        self.pq.sort()  # Sort by frequency and lexicographical order
 
     def pop(self) -> PQEntry:
-        return heapq.heappop(self.pq) if self.pq else None
+        return heapq.heappop(self.pq)
 
     def is_empty(self) -> bool:
         return len(self.pq) == 0
@@ -122,9 +126,7 @@ def initialize_word(
     
     # Traverse each pair in the word.
     while cursor and cursor.next:
-        pair_node = cursor, cursor.next  # Get the pair, should be 2 Tokens.
-
-        token_pair = pair_node[0].token, pair_node[1].token
+        token_pair = cursor.token, cursor.next.token
 
         # Create a mapping from the pair to the words that contain it.
         pair_to_words[token_pair].add(cursor)
@@ -156,10 +158,23 @@ def merge(
     for word, freq in word_freq_table.items():
         initialize_word(word, freq, token_pair_freq_table, pair_occurrences_in_words)
 
+    token_pair_freq_table_ref = {}
+    merge_freq_table = defaultdict(int)
+    def add_word_to_token_pair_freq_table(merge_freq_table, word, word_freq):
+        for i in range(len(word) - 1):
+            pair = word[i : i + 2]  # Get the pair
+            merge_freq_table[pair] = merge_freq_table.get(pair, 0) + word_freq
+
+    # Initialize the merge freq table by adding the byte pairs.
+    for word in word_freq_table.keys():
+        add_word_to_token_pair_freq_table(
+            token_pair_freq_table_ref, word, word_freq_table[word]
+        )
+
     # Convert the frequency table to a priority queue of TokenPair objects.
     token_pair_pq = TokenPairPQ(
             [
-                PQEntry(pair[0], pair[1], freq)
+                PQEntry(pair[0], pair[1], vocab[pair[0]], vocab[pair[1]], freq)
                 for pair, freq in token_pair_freq_table.items()
             ]
         )
@@ -169,7 +184,7 @@ def merge(
     for _ in tqdm(range(steps), desc="Merge"):
 
         # Pop the priority queue until we find a valid pair.
-        most_frequent_pair = None
+        best_pq_entry = None
         while not token_pair_pq.is_empty():
             entry = token_pair_pq.pop()
             token_pair = (entry.first, entry.second)
@@ -181,36 +196,35 @@ def merge(
             # The frequency table stores the latest frequency of the pair.
             # If the pair's frequncy matches the table, then it is the latest state of the queue and we should merge it.
             if (
-                entry.frequency
-                == token_pair_freq_table[token_pair]
+                entry.frequency == token_pair_freq_table[token_pair]
             ):
-                most_frequent_pair = entry
+                best_pq_entry = entry
                 break
-        if most_frequent_pair is None:
+        if best_pq_entry is None:
             break
+
+        most_frequent_pair = best_pq_entry.get_token_pair()
 
         # Record the merge operation for testing; nothing is really being merged now.
         merge_sequence.append(most_frequent_pair)
 
         # Record a new word in the final vocabulary.
-        result_vocab[len(result_vocab)] = most_frequent_pair.get_merged_bytes(result_vocab)
+        result_vocab[len(result_vocab)] = best_pq_entry.get_merged_bytes(result_vocab)
 
         new_token = len(result_vocab) - 1  # The new token ID for the merged token.
 
-        # store words to be merged, and record each operations of
-        # "replacing the original word, and tranfer its frequency to the new word".
-        for wordnode in pair_occurrences_in_words[
-            most_frequent_pair
-        ]:  # Update the words that contain the most frequent pair.
-            # Store the indices of the pair with max frequency, instead of doing the merge in-place.
-            
-            old_first, old_second = wordnode, wordnode.next
-            old_token_pair = (old_first.token, old_second.token)
+        pairs_with_updated_freq = set()        
+        # Do the merge operation for each occurrence of the pair.
+        for wordnode in pair_occurrences_in_words[most_frequent_pair].copy():  # Update the words that contain the most frequent pair.
 
-            # Update the word.
+            old_first, old_second = wordnode, wordnode.next
+            if not old_second:
+                continue
+            old_token_pair = (old_first.token, old_second.token)
+            pair_occurrences_in_words[old_token_pair].discard(old_first)
+
+            # Create the new word node.
             new_wordnode = WordNode(new_token, wordnode.word_freq)
-            new_wordnode.prev = old_first.prev
-            new_wordnode.next = old_second.next
 
             if old_first.prev:
                 # 1. Modify the word.
@@ -218,28 +232,53 @@ def merge(
                 new_wordnode.prev = old_first.prev
 
                 # 2. Modify the map from pairs to words, since the word has changed.
-                pair_occurrences_in_words[old_token_pair].discard(old_first)
-                new_token_pair = PQEntry(
-                    old_first.prev.token, new_token, wordnode.word_freq.freq
-                )
-                pair_occurrences_in_words[new_token_pair].add(old_first.prev)
+                # Remove the occurrence at the left of (old_first, old_second): (old_first.prev, old_first).
+                pair_occurrences_in_words[(old_first.prev.token, old_first.token)].discard(old_first.prev)
+                # Add the new occurrence: (old_first.prev, new_token).
+                pair_occurrences_in_words[(old_first.prev.token, new_token)].add(old_first.prev)
 
                 # 3. Modify the pair frequency table.
                 # Reduce the frequency of the word from the old pair.
-                token_pair_freq_table[old_token_pair] -= wordnode.word_freq.freq 
-                # Increase the frequency of the word in the new pair.
-                token_pair_freq_table[new_token_pair] += wordnode.word_freq.freq
-
-                # Add the new token pair and its frequency to the priority queue.
-                token_pair_pq.add(PQEntry(
-                    old_first.prev.token, new_token, token_pair_freq_table[new_token_pair]
-                ))
+                token_pair_freq_table[(old_first.prev.token, old_first.token)] -= wordnode.word_freq.freq 
+                pairs_with_updated_freq.add((old_first.prev.token, new_token))
+                # Increase the frequency of the word in the new pair, also update the new in the .
+                token_pair_freq_table[old_first.prev.token, new_token] += wordnode.word_freq.freq
+                pairs_with_updated_freq.add((old_first.prev.token, new_token))
 
             if old_second.next:
+                # 1. Modify the word.
                 old_second.next.prev = new_wordnode
-            
-            del old_first
-            del old_second
+                new_wordnode.next = old_second.prev
+
+                # 2. Modify the map from pairs to words, since the word has changed.
+                # Remove the occurrence at the right of (old_first, old_second): (old_second, old_second.next).
+                pair_occurrences_in_words[(old_second.token, old_second.next.token)].discard(old_second)
+                # Add the new occurrence: (old_first.prev, new_token).
+                pair_occurrences_in_words[(new_token, old_second.next.token)].add(new_wordnode)
+
+                # 3. Modify the pair frequency table.
+                # Reduce the frequency of the word from the old pair.
+                token_pair_freq_table[(old_second.token, old_second.next.token)] -= wordnode.word_freq.freq 
+                pairs_with_updated_freq.add((new_token, old_second.next.token))
+                # Increase the frequency of the word in the new pair.
+                token_pair_freq_table[(new_token, old_second.next.token)] += wordnode.word_freq.freq
+
+                # 4. Add the new token pair and its frequency to the priority queue.
+                pairs_with_updated_freq.add((new_token, old_second.next.token))
+        
+        # Apply the updated frequencies to the priority queue.
+        for pair in pairs_with_updated_freq:
+            token_pair_pq.push(
+                PQEntry(
+                    pair[0], pair[1],
+                    result_vocab[pair[0]], result_vocab[pair[1]],
+                    token_pair_freq_table[pair]
+                )
+            )
+
+        # Remove the pair from records.
+        del token_pair_freq_table[most_frequent_pair]
+        del pair_occurrences_in_words[most_frequent_pair]
 
     return (result_vocab, merge_sequence)
 
