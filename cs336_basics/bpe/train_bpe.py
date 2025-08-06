@@ -73,7 +73,9 @@ def pre_tokenize_and_count(tasks: list[Task], num_processes) -> Counter[Word]:
 
         results = pool.imap_unordered(pretokenize_executor, tasks)
 
-        for pretokenization_chunk_result in tqdm(results, total=len(tasks), desc="Pre-tokenizing by chunks:"):
+        for pretokenization_chunk_result in tqdm(
+            results, total=len(tasks), desc="Pre-tokenizing by chunks:"
+        ):
             print(len(pretokenization_chunk_result), "words found in chunk")
             word_freq_table.update(pretokenization_chunk_result)
 
@@ -440,6 +442,18 @@ def train_bpe(
     return starter_vocab, merge_result
 
 
+def train_bpe_tinystories_sample():
+    input_path = f"{os.getcwd()}/data/tinystories_sample_5M.txt"
+    vocab_size = 2000
+    special_tokens = ["<|endoftext|>"]
+
+    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+
+    # Save the vocabulary and merges to files.
+    write_merges(merges, "cs336_basics/bpe/output/merges_tinystories_sample.pkl")
+    write_vocab(vocab, "cs336_basics/bpe/output/vocab_tinystories_sample.pkl")
+
+
 def train_bpe_tinystories():
     input_path = f"{os.getcwd()}/data/TinyStoriesV2-GPT4-train.txt"
     vocab_size = 10000
@@ -451,6 +465,7 @@ def train_bpe_tinystories():
     write_merges(merges, "cs336_basics/bpe/output/merges_tinystories.pkl")
     write_vocab(vocab, "cs336_basics/bpe/output/vocab_tinystories.pkl")
 
+
 def train_bpe_expts_owt():
     input_path = f"{os.getcwd()}/data/owt_train.txt"
     vocab_size = 32000
@@ -461,6 +476,7 @@ def train_bpe_expts_owt():
     # Save the vocabulary and merges to files.
     write_merges(merges, "cs336_basics/bpe/output/merges_owt.pkl")
     write_vocab(vocab, "cs336_basics/bpe/output/vocab_owt.pkl")
+
 
 def write_merges(merges, outpath):
     """Pickle the merges list to a binary file."""
@@ -476,10 +492,8 @@ def write_vocab(vocab, outpath):
     with open(outpath, "wb") as f:
         pickle.dump(vocab, f)
     print(f"Saved vocabulary with {len(vocab)} tokens to {outpath}")
-            
+
+
 if __name__ == "__main__":
     # Example usage
-    train_bpe_tinystories()
-    print("BPE training for tinystories completed.")
-    train_bpe_expts_owt()
-    print("BPE training for OWT completed.")
+    train_bpe_tinystories_sample()
