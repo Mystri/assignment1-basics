@@ -13,6 +13,7 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
+from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
 
 def run_linear(
@@ -566,7 +567,7 @@ def get_tokenizer(
     Returns:
         A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
-    raise NotImplementedError
+    return Tokenizer(vocab, merges, special_tokens)
 
 
 def run_train_bpe(

@@ -37,6 +37,14 @@ class Tokenizer:
         """
         Encodes a string into a list of token IDs based on the vocabulary.
         """
+        pre_tokenization_result = self.pretokenize(text)
+        result = []
+        for idx, word in enumerate(pre_tokenization_result):
+            encode_word_result = self.encode_word(word)
+            result.append(encode_word_result)
+        
+        
+        return sum(result, []) # Flatten the list of [list of token IDs]
 
     def pretokenize(self, text: str) -> list[bytes]:
         """
@@ -45,7 +53,7 @@ class Tokenizer:
         """
         if not self.special_tokens:
             return [
-                tok.encode("utf-8") for tok in self.pretokenizer_pattern.findall(text)
+                self.convert_bytes_to_token_list(match.encode("utf-8")) for match in self.pretokenizer_pattern.findall(text)
             ]
 
         tokens = []
@@ -53,7 +61,7 @@ class Tokenizer:
         parts = re.split(self.special_pattern, text)
         for part in parts:
             if part in self.special_tokens:
-                tokens.append(self.token_id_of_word[part.encode("utf-8")])
+                tokens.append([self.token_id_of_word[part.encode("utf-8")]])
             else:
                 # Each find would be a word.
                 matches = [
@@ -71,7 +79,7 @@ class Tokenizer:
         return [self.token_id_of_word[bytes([byte])] for byte in text]
 
     def encode_word(self, word: Word) -> list[int]:
-        pass
+        return word
 
     @classmethod
     def from_files(
