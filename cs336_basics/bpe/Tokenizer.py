@@ -17,9 +17,14 @@ class Tokenizer:
         # assert merges
 
         self.vocab = vocab
-        self.merges = merges
 
         self.token_id_of_word = {v: k for k, v in self.vocab.items()}
+
+        # Easily determine a merge's priority in the whole sequence.
+        self.merge_ranks = {
+            # Convert bytes in merges to token IDs.
+            (self.token_id_of_word[merge[0]], self.token_id_of_word[merge[1]]): i for i, merge in enumerate(merges)
+        }  # also coule be used to determine if a pair is mergeable.
 
         PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
         self.pretokenizer_pattern = re.compile(PAT)
