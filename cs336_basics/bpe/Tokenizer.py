@@ -23,8 +23,9 @@ class Tokenizer:
         # Easily determine a merge's priority in the whole sequence.
         self.merge_ranks = {
             # Convert bytes in merges to token IDs.
-            (self.token_id_of_word[merge[0]], self.token_id_of_word[merge[1]]): i for i, merge in enumerate(merges)
-        }  # also coule be used to determine if a pair is mergeable.
+            (self.token_id_of_word[merge[0]], self.token_id_of_word[merge[1]]): i
+            for i, merge in enumerate(merges)
+        }  # also could be used to determine if a pair is mergeable.
 
         PAT = r"'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
         self.pretokenizer_pattern = re.compile(PAT)
@@ -43,13 +44,14 @@ class Tokenizer:
         Encodes a string into a list of token IDs based on the vocabulary.
         """
         pre_tokenization_result = self.pretokenize(text)
-        result = []
+        result = [[] for _ in range(len(pre_tokenization_result))]
+        # Simulate parallel processing of words.
         for idx, word in enumerate(pre_tokenization_result):
-            encode_word_result = self.encode_word(word)
-            result.append(encode_word_result)
-        
-        
-        return sum(result, []) # Flatten the list of [list of token IDs]
+            result_idx, encode_word_result = self.encode_word(idx, word)
+
+            result[result_idx] = encode_word_result
+
+        return sum(result, [])  # Flatten the list of [list of token IDs]
 
     def pretokenize(self, text: str) -> list[bytes]:
         """
@@ -58,7 +60,8 @@ class Tokenizer:
         """
         if not self.special_tokens:
             return [
-                self.convert_bytes_to_token_list(match.encode("utf-8")) for match in self.pretokenizer_pattern.findall(text)
+                self.convert_bytes_to_token_list(match.encode("utf-8"))
+                for match in self.pretokenizer_pattern.findall(text)
             ]
 
         tokens = []
@@ -73,9 +76,7 @@ class Tokenizer:
                     match.encode(encoding="utf-8")
                     for match in self.pretokenizer_pattern.findall(part)
                 ]
-                tokens += [
-                    self.convert_bytes_to_token_list(match) for match in matches
-                ]
+                tokens += [self.convert_bytes_to_token_list(match) for match in matches]
 
         return tokens
 
@@ -83,8 +84,34 @@ class Tokenizer:
         # Convert each byte of a word of a into the form of its token id.
         return [self.token_id_of_word[bytes([byte])] for byte in text]
 
-    def encode_word(self, word: Word) -> list[int]:
-        return word
+    def encode_word(self, word_rank_in_text: int, word: Word) -> list[int]:
+        if len(word) == 1:
+            return (word_rank_in_text, word)
+
+        while True:
+            best_rank, occurrence, best_pair = (len(self.merge_ranks) + 1), None, None
+
+            # Get the most prioritized mergeable pair in word length time.
+            for idx in range(len(word) - 1):
+                pair = (word[idx], word[idx + 1])
+
+                if pair in self.merge_ranks:
+                    priority = self.merge_ranks[pair]
+
+                    if priority < best_rank:
+                        best_rank = priority
+                        occurrence = idx
+                        best_pair = pair
+
+            if occurrence is None:
+                break  # No more merges available.
+
+            merged_bytes = self.vocab[best_pair[0]] + self.vocab[best_pair[1]]
+            merged_token_id = self.token_id_of_word[merged_bytes]
+
+            word = word[:occurrence] + [merged_token_id] + word[occurrence + 2 :]
+
+        return (word_rank_in_text, word)
 
     @classmethod
     def from_files(
@@ -125,7 +152,7 @@ if __name__ == "__main__":
         tokenizer = Tokenizer.from_files(
             "cs336_basics/bpe/output/vocab_tinystories.pkl",
             "cs336_basics/bpe/output/merges_tinystories_sample.pkl",
-            ["<|endoftext|>"]
+            ["<|endoftext|>"],
         )
 
         pre_token_result = tokenizer.pretokenize(text)

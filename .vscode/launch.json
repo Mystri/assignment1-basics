@@ -21,12 +21,12 @@
       ],
     },
     {
-      "name": "Pytest test_tokenizer.py standalone test",
+      "name": "Pytest test_tokenizer.py single",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_tokenizer.py::test_roundtrip_unicode_string_with_special_tokens"
+        "tests/test_tokenizer.py::test_single_unicode_character_matches_tiktoken"
       ],
     }
   ]
