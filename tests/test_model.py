@@ -3,7 +3,7 @@ import numpy
 import torch
 import torch.nn.functional as F
 
-from .adapters import (
+from adapters import (
     run_multihead_self_attention_with_rope,
     run_rope,
     run_silu,

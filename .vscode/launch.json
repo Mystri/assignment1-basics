@@ -12,12 +12,12 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Pytest test_tokenizer.py all",
+      "name": "Pytest test_model.py all",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_tokenizer.py"
+        "tests/test_model.py"
       ],
     },
     {
@@ -26,7 +26,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_tokenizer.py::test_single_unicode_character_matches_tiktoken"
+        "tests/test_model.py::test_linear"
       ],
     }
   ]
