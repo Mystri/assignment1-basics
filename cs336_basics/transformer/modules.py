@@ -12,7 +12,7 @@ def create_and_init_with_trunc_normal(mean, std, out_features, in_features):
 class Linear(torch.nn.Module):
     def __init__(self, in_features, out_features, device=None, dtype=None):
         super().__init__()
-        
+
         mean = 0.0
         std = math.sqrt(2 / (in_features + out_features))
 
@@ -28,7 +28,7 @@ class Linear(torch.nn.Module):
 class Embedding(torch.nn.Module):
     def __init__(self, num_embeddings, embedding_dim, device=None, dtype=None):
         super().__init__()
-        
+
         w = torch.empty(num_embeddings, embedding_dim)
         torch.nn.init.trunc_normal_(w, mean=0.0, std=1.0, a=-3, b=3)
         self.weight = torch.nn.Parameter(w)
@@ -40,7 +40,7 @@ class Embedding(torch.nn.Module):
 class RmsNorm(torch.nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
         super().__init__()
-        
+
         self.weight = torch.nn.Parameter(torch.ones(d_model))
         self.eps = eps
 
@@ -55,14 +55,15 @@ class RmsNorm(torch.nn.Module):
         )
         return result.to(in_dtype)
 
+
 def silu(x: torch.Tensor):
     return x * torch.sigmoid(x)
-    
+
+
 class SWiGLU(torch.nn.Module):
     def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
         super().__init__()
 
-        
         if d_ff == None:
             d_ff = d_model * 8 // 3
             d_ff = math.ceil(d_ff / 64) * 64  # Ensure d_ff is a multiple of 64
@@ -73,6 +74,7 @@ class SWiGLU(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(silu(self.w1(x)) * self.w3(x))
+
 
 class RotaryPositionalEmbedding(torch.nn.Module):
     def __init__(
@@ -89,10 +91,11 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         positions = torch.arange(max_seq_len, device=device).unsqueeze(1)
 
         # For pos i and vector pair k, rotate of i * (1 / theta**(2k/d)).
-        k = torch.arange(0, d_k, 2, device=device)
-        inv_freqs = theta ** (-2 * k)
+        # 2 * k / d_k
+        freqs_for_each_pair = torch.arange(0, d_k, 2, device=device) / d_k
+        inv_freqs = theta**-freqs_for_each_pair
         angles = positions * inv_freqs
-        
+
         self.register_buffer("cos", angles.cos().to(dtype), persistent=False)
         self.register_buffer("sin", angles.sin().to(dtype), persistent=False)
 
@@ -101,15 +104,17 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         sin = self.sin[token_positions]
 
         evens = x[..., 0::2]
-        odds = x[..., 1::2] # Split the input tensor into evens and odds
+        odds = x[..., 1::2]  # Split the input tensor into evens and odds
 
-        result_evens = evens * cos - evens * sin
-        result_odds = odds * cos + odds * sin
+        result_evens = evens * cos - odds * sin
+        result_odds = evens * sin + odds * cos
 
         # Interleave:
         # Move the first dimension (even, odd) to the last dimension.
         # The second to last dimension should contain a lot of (even, odd) pairs.
-        pairs = einops.rearrange([result_evens, result_odds], "d_even_odd ... -> ... d_even_odd")
-        result = einops.rearrange(pairs, "... d_2 d_1 -> ... (d_2, d_1)")
+        pairs = einops.rearrange(
+            torch.stack([result_evens, result_odds]), "d_even_odd ... -> ... d_even_odd"
+        )
+        result = einops.rearrange(pairs, "... d_2 d_1 -> ... (d_2 d_1)")
 
         return result

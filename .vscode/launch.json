@@ -26,7 +26,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_model.py::test_linear"
+        "tests/test_model.py::test_rope"
       ],
     }
   ]
