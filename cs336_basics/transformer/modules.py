@@ -1,7 +1,9 @@
 import math
 import torch
+from torch import Tensor
 import einops
 
+from jaxtyping import Float, Bool
 
 def create_and_init_with_trunc_normal(mean, std, out_features, in_features):
     w = torch.empty(out_features, in_features)
@@ -99,28 +101,42 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         self.register_buffer("cos", angles.cos().to(dtype), persistent=False)
         self.register_buffer("sin", angles.sin().to(dtype), persistent=False)
 
-    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        cos = self.cos[token_positions]
-        sin = self.sin[token_positions]
+    def forward(
+        self,
+        x: Float[Tensor, "... sequence_length d_k"],
+        token_positions: Float[Tensor, "... sequence_length"],
+    ) -> Float[Tensor, "... sequence_length d_k"]:
+        cos: Float[Tensor, "... sequence_length"] = self.cos[token_positions]
+        sin: Float[Tensor, "... sequence_length"] = self.sin[token_positions]
 
-        evens = x[..., 0::2]
-        odds = x[..., 1::2]  # Split the input tensor into evens and odds
+        evens: Float[Tensor, "... sequence_length d_k/2"] = x[..., 0::2]
+        odds: Float[Tensor, "... sequence_length d_k/2"] = x[..., 1::2]  # Split the input tensor into evens and odds
 
-        result_evens = evens * cos - odds * sin
-        result_odds = evens * sin + odds * cos
+        result_evens: Float[Tensor, "... sequence_length d_k/2"] = evens * cos - odds * sin
+        result_odds: Float[Tensor, "... sequence_length d_k/2"] = evens * sin + odds * cos
 
         # Interleave:
         # Move the first dimension (even, odd) to the last dimension.
         # The second to last dimension should contain a lot of (even, odd) pairs.
-        pairs = einops.rearrange(
+        pairs: Float[Tensor, "... sequence_length d_k/2 2"] = einops.rearrange(
             torch.stack([result_evens, result_odds]), "d_even_odd ... -> ... d_even_odd"
         )
-        result = einops.rearrange(pairs, "... d_2 d_1 -> ... (d_2 d_1)")
+        result: Float[Tensor, "... sequence_length d_k"]  = einops.rearrange(pairs, "... d_2 d_1 -> ... (d_2 d_1)")
 
         return result
 
 
-def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+def softmax(x: Float[Tensor, " ... dim"], dim: int) -> Float[Tensor, " ... dim"]:
     shifted_x = x - torch.max(x, dim=dim, keepdim=True).values
     exp_x = torch.exp(shifted_x)
     return exp_x / exp_x.sum(dim=dim, keepdim=True)
+
+
+def scaled_dot_product_attention(
+    Q: Float[Tensor, " ... d_v  d_qk"],
+    K: Float[Tensor, " ... d_v     d_qk"],
+    V: Float[Tensor, " ... d_v     d_v"],
+    mask: Bool[Tensor, " ... num_queries num_keys"] | None = None,
+):
+    # This term means exactly: the operation of attentionscore(x)v = qk/sqrt(d)
+    pass    
