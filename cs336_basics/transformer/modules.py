@@ -118,3 +118,9 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         result = einops.rearrange(pairs, "... d_2 d_1 -> ... (d_2 d_1)")
 
         return result
+
+
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+    shifted_x = x - torch.max(x, dim=dim, keepdim=True).values
+    exp_x = torch.exp(shifted_x)
+    return exp_x / exp_x.sum(dim=dim, keepdim=True)

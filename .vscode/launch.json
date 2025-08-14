@@ -12,7 +12,7 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Pytest test_model.py all",
+      "name": "Pytest whole file",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
@@ -21,12 +21,12 @@
       ],
     },
     {
-      "name": "Pytest test_tokenizer.py single",
+      "name": "Pytest single",
       "type": "debugpy",
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_model.py::test_rope"
+        "tests/test_nn_utils.py::test_softmax_matches_pytorch"
       ],
     }
   ]

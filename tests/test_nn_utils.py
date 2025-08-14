@@ -2,7 +2,7 @@ import numpy
 import torch
 import torch.nn.functional as F
 
-from .adapters import run_cross_entropy, run_gradient_clipping, run_softmax
+from adapters import run_cross_entropy, run_gradient_clipping, run_softmax
 
 
 def test_softmax_matches_pytorch():

@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
-from cs336_basics.transformer.modules import Embedding, Linear, RmsNorm, RotaryPositionalEmbedding, SWiGLU
+from cs336_basics.transformer.modules import Embedding, Linear, RmsNorm, RotaryPositionalEmbedding, SWiGLU, softmax
 
 
 def run_linear(
@@ -450,7 +450,7 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         Float[Tensor, "..."]: Tensor of with the same shape as `in_features` with the output of
         softmax normalizing the specified `dim`.
     """
-    raise NotImplementedError
+    return softmax(in_features, dim)
 
 
 def run_cross_entropy(
