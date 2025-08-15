@@ -154,14 +154,16 @@ def scaled_dot_product_attention(
     """
     d_qk = q.shape[-1]
 
-    attention_score = softmax(
-        einops.einsum(
-            q,
-            k,
-            "... q_seq_len  d_qk, ... kv_seq_len  d_qk -> ... q_seq_len kv_seq_len",
-        )
-        / math.sqrt(d_qk)
-    )[mask]
+    attention_scores = einops.einsum(
+        q, k, "... q_seq_len  d_qk, ... kv_seq_len  d_qk -> ... q_seq_len kv_seq_len"
+    ) / math.sqrt(d_qk)
+    masked_attention_scores = torch.where(mask, attention_scores, float("-inf"))
+    softmax_masked_attention_scores = softmax(masked_attention_scores, -1)
 
-    v = einops.einsum(attention_score, v, "... q_seq_len kv_seq_len,  ... kv_seq_len, d_v -> ... d_v")
+    # Align the dimensions such that each query gets a value
+    v = einops.einsum(
+        softmax_masked_attention_scores,
+        v,
+        "... q_seq_len kv_seq_len,  ... kv_seq_len d_v -> ... q_seq_len d_v",
+    )
     return v
