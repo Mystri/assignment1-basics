@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
-from cs336_basics.transformer.modules import Embedding, Linear, RmsNorm, RotaryPositionalEmbedding, SWiGLU, softmax
+from cs336_basics.transformer.modules import Embedding, Linear, RmsNorm, RotaryPositionalEmbedding, SWiGLU, scaled_dot_product_attention, softmax
 
 
 def run_linear(
@@ -118,7 +118,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(q=Q, k=K, v=V, mask=mask)
 
 
 def run_multihead_self_attention(

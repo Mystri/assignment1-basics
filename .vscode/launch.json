@@ -26,7 +26,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_nn_utils.py::test_softmax_matches_pytorch"
+        "tests/test_model.py::test_scaled_dot_product_attention"
       ],
     }
   ]
