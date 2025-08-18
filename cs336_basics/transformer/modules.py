@@ -141,12 +141,12 @@ def scaled_dot_product_attention(
     q: Float[Tensor, " ... q_seq_len   d_qk"],
     k: Float[Tensor, " ... kv_seq_len  d_qk"],
     v: Float[Tensor, " ... kv_seq_len  d_v"],
-    mask: Bool[Tensor, " ... d_v"] | None = None,
+    mask: Bool[Tensor, " ... q_seq_len kv_seq_len"] | None = None,
 ) -> Float[Tensor, " ... d_v"]:
     """
     This term means exactly: the operation of attentionscore(x)v = softmax(qk/sqrt(d))v
     """
-    # d_qk is the of dimension the input tensor. 
+    # d_qk is the of dimension the input tensor.
     d_qk = q.shape[-1]
     # it is irrelevant to our attention score, which is "at token level", the attention between tokens, for example,
     # between 1st token and 5th token.
@@ -190,29 +190,39 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
         )
 
     def forward(
-        self, x: Float[Tensor, "... seq_len d_v"],
+        self,
+        x: Float[Tensor, "... seq_len d_v"],
     ) -> Float[Tensor, "... seq_len d_v"]:
 
         # self-attention, in_seq_len = out_seq_len
         seq_len = x.shape[-2]
         qkv = self.Wqkv(x)
-        qkv = torch.split(qkv, self.d_model, dim=-1)
+        q, k, v = qkv.chunk(3, dim=-1)
 
-        # Split into heads
-        q, k, v = [
-            einops.rearrange(
-                tensor,
-                "batch_size seq_len (n_head d_head) -> batch_size n_head seq_len d_head",
-                n_head = self.num_heads
-            )
-            for tensor in qkv
-        ]
+        # Split into heads.
+        q = einops.rearrange(
+            q,
+            "... seq_len (n_head d_head) -> ... n_head seq_len d_head",
+            n_head=self.num_heads,
+        )
+        k = einops.rearrange(
+            k,
+            "... seq_len (n_head d_head) -> ... n_head seq_len d_head",
+            n_head=self.num_heads,
+        )
+        v = einops.rearrange(
+            v,
+            "... seq_len (n_head d_head) -> ... n_head seq_len d_head",
+            n_head=self.num_heads,
+        )
 
-        # Create Mask.
-        mask = torch.tril(torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool))
+        # Create Mask for the head view.
+        mask = torch.tril(
+            torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool)
+        )
 
         attention_result = scaled_dot_product_attention(q, k, v, mask)
-
-        combined_attention_result = einops.rearrange(attention_result, "batch_size n_head seq_len d_head -> batch_size seq_len (n_head d_head)")
+        combined_attention_result = einops.rearrange(
+            attention_result, "... n_head seq_len d_head -> ... seq_len (n_head d_head)"
+        )
         return self.out_projection(combined_attention_result)
-        
