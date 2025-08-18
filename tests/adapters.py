@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
-from cs336_basics.transformer.modules import Embedding, Linear, RmsNorm, RotaryPositionalEmbedding, SWiGLU, scaled_dot_product_attention, softmax
+from cs336_basics.transformer.modules import Embedding, Linear, CausalMultiheadSelfAttention, RmsNorm, RotaryPositionalEmbedding, SWiGLU, scaled_dot_product_attention, softmax
 
 
 def run_linear(
@@ -152,8 +152,11 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
-
+    multihead_self_attention = CausalMultiheadSelfAttention(d_model, num_heads)
+    Wqkv = torch.stack((q_proj_weight, k_proj_weight, v_proj_weight), dim=-1)
+    multihead_self_attention.Wqkv.weight.data = Wqkv
+    multihead_self_attention.out_projection.data = o_proj_weight
+    return multihead_self_attention.forward(x=in_features)
 
 def run_multihead_self_attention_with_rope(
     d_model: int,

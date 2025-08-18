@@ -6,12 +6,6 @@ import einops
 from jaxtyping import Float, Bool
 
 
-def create_and_init_with_trunc_normal(mean, std, out_features, in_features):
-    w = torch.empty(out_features, in_features)
-    torch.nn.init.trunc_normal_(w, mean=mean, std=std, a=-3 * std, b=3 * std)
-    return w
-
-
 class Linear(torch.nn.Module):
     def __init__(self, in_features, out_features, device=None, dtype=None):
         super().__init__()
@@ -144,22 +138,28 @@ def softmax(x: Float[Tensor, " ... dim"], dim: int) -> Float[Tensor, " ... dim"]
 
 
 def scaled_dot_product_attention(
-    q: Float[Tensor, "batch_size ... q_seq_len   d_qk"],
-    k: Float[Tensor, "batch_size ... kv_seq_len  d_qk"],
-    v: Float[Tensor, "batch_size ... kv_seq_len  d_v"],
-    mask: Bool[Tensor, "batch_size ... d_v"] | None = None,
-) -> Float[Tensor, "batch_size ... d_v"]:
+    q: Float[Tensor, " ... q_seq_len   d_qk"],
+    k: Float[Tensor, " ... kv_seq_len  d_qk"],
+    v: Float[Tensor, " ... kv_seq_len  d_v"],
+    mask: Bool[Tensor, " ... d_v"] | None = None,
+) -> Float[Tensor, " ... d_v"]:
     """
     This term means exactly: the operation of attentionscore(x)v = softmax(qk/sqrt(d))v
     """
+    # d_qk is the of dimension the input tensor. 
     d_qk = q.shape[-1]
+    # it is irrelevant to our attention score, which is "at token level", the attention between tokens, for example,
+    # between 1st token and 5th token.
+    # So, dimensions of the attention_score matrix should be q_seq_len kv_seq_len
 
+    # Perform AttentionScore(q, k) = softmax(mask(qk) / sqrt(d))
     attention_scores = einops.einsum(
         q, k, "... q_seq_len  d_qk, ... kv_seq_len  d_qk -> ... q_seq_len kv_seq_len"
     ) / math.sqrt(d_qk)
     masked_attention_scores = torch.where(mask, attention_scores, float("-inf"))
-    softmax_masked_attention_scores = softmax(masked_attention_scores, -1)
+    softmax_masked_attention_scores = softmax(masked_attention_scores, dim=-1)
 
+    # Perform attention_score @ v.
     # Align the dimensions such that each query gets a value
     v = einops.einsum(
         softmax_masked_attention_scores,
@@ -167,3 +167,48 @@ def scaled_dot_product_attention(
         "... q_seq_len kv_seq_len,  ... kv_seq_len d_v -> ... q_seq_len d_v",
     )
     return v
+
+
+class CausalMultiheadSelfAttention(torch.nn.Module):
+    def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
+        super().__init__()
+
+        self.num_heads = num_heads
+        self.d_model = d_model
+        # As the original transformer described, d_model/h = d_qk = d_v
+        self.d_head = d_model // num_heads
+
+        self.Wqkv = Linear(
+            out_features=3 * d_model, in_features=d_model, device=device, dtype=dtype
+        )
+
+        self.out_projection = Linear(
+            out_features=self.d_model,
+            in_features=self.d_model,
+            device=device,
+            dtype=dtype,
+        )
+
+    def forward(
+        self, x: Float[Tensor, "... seq_len d_v"],
+    ) -> Float[Tensor, "... seq_len d_v"]:
+
+        # self-attention, in_seq_len = out_seq_len
+        seq_len = x.shape[-2]
+
+        qkv = torch.split(self.Wqkv(x), 3, dim=-1)
+
+        # Split into heads
+        q, k, v = [
+            einops.rearrange(
+                tensor,
+                "batch_size seq_len (num_head d_head) -> batch_size n_head seq_len d_head",
+            )
+            for tensor in qkv
+        ]
+
+        # Create Mask.
+        mask = torch.tril(torch.ones(seq_len, seq_len), device=x.device, dtype=torch.bool)
+
+        return scaled_dot_product_attention(q, k, v, mask)
+        
