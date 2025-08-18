@@ -174,8 +174,6 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
         self,
         d_model: int,
         num_heads: int,
-        theta: float = None,
-        max_seq_length:int = None,
         device=None,
         dtype=None,
     ):
@@ -197,28 +195,17 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
             dtype=dtype,
         )
 
-        if theta is not None and max_seq_length is not None:
-            self.rope = RotaryPositionalEmbedding(theta, d_model, max_seq_length, device, dtype)
-        else:
-            self.rope = None
-
     def forward(
         self,
         x: Float[Tensor, "... seq_len d_v"],
-        token_positions: Int[Tensor, " ... sequence_length"] | None = None
+        rope: RotaryPositionalEmbedding,
+        token_positions: Int[Tensor, " ... sequence_length"] | None = None,
     ) -> Float[Tensor, "... seq_len d_v"]:
 
         # self-attention, in_seq_len = out_seq_len
         seq_len = x.shape[-2]
         qkv = self.Wqkv(x)
         q, k, v = qkv.chunk(3, dim=-1)
-
-
-        if self.rope is not None:
-            if token_positions is None:
-                token_positions = torch.arange(seq_len, device=x.device)
-            q = self.rope(q, token_positions)
-            k = self.rope(k, token_positions)
 
         # Split into heads.
         q = einops.rearrange(
@@ -236,6 +223,12 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
             "... seq_len (n_head d_head) -> ... n_head seq_len d_head",
             n_head=self.num_heads,
         )
+
+        if rope is not None:
+            if token_positions is None:
+                token_positions = torch.arange(seq_len, device=x.device)
+            q = rope(q, token_positions)
+            k = rope(k, token_positions)
 
         # Create Mask for the head view.
         mask = torch.tril(

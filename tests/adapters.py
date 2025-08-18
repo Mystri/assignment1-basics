@@ -209,16 +209,22 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    multihead_self_attention = CausalMultiheadSelfAttention(
-        d_model=d_model, num_heads=num_heads, theta=theta, max_seq_length=max_seq_len
-    )
+    multihead_self_attention = CausalMultiheadSelfAttention(d_model, num_heads)
 
     Wqkv = torch.cat((q_proj_weight, k_proj_weight, v_proj_weight), dim=0)
     multihead_self_attention.Wqkv.weight.data = Wqkv
 
     multihead_self_attention.out_projection.weight.data = o_proj_weight
 
-    return multihead_self_attention(x=in_features, token_positions=token_positions)
+    # 1. Use global RoPE to avoid wasting memory.
+    # 2. The step of applying RoPE should be meaningful only *in each head*!! so d_k = dimension of each head!!.
+    rope = RotaryPositionalEmbedding(
+        theta=theta, d_k=d_model // num_heads, max_seq_len=max_seq_len
+    )
+
+    return multihead_self_attention(
+        x=in_features, rope=rope, token_positions=token_positions
+    )
 
 
 def run_rope(
