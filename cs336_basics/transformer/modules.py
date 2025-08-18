@@ -195,20 +195,24 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
 
         # self-attention, in_seq_len = out_seq_len
         seq_len = x.shape[-2]
-
-        qkv = torch.split(self.Wqkv(x), 3, dim=-1)
+        qkv = self.Wqkv(x)
+        qkv = torch.split(qkv, self.d_model, dim=-1)
 
         # Split into heads
         q, k, v = [
             einops.rearrange(
                 tensor,
-                "batch_size seq_len (num_head d_head) -> batch_size n_head seq_len d_head",
+                "batch_size seq_len (n_head d_head) -> batch_size n_head seq_len d_head",
+                n_head = self.num_heads
             )
             for tensor in qkv
         ]
 
         # Create Mask.
-        mask = torch.tril(torch.ones(seq_len, seq_len), device=x.device, dtype=torch.bool)
+        mask = torch.tril(torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool))
 
-        return scaled_dot_product_attention(q, k, v, mask)
+        attention_result = scaled_dot_product_attention(q, k, v, mask)
+
+        combined_attention_result = einops.rearrange(attention_result, "batch_size n_head seq_len d_head -> batch_size seq_len (n_head d_head)")
+        return self.out_projection(combined_attention_result)
         
