@@ -24,6 +24,7 @@ from cs336_basics.transformer.modules import (
     RotaryPositionalEmbedding,
     SWiGLU,
     Transformer,
+    remap_transformer_weights,
     scaled_dot_product_attention,
     softmax,
 )
@@ -428,24 +429,8 @@ def run_transformer_lm(
         num_heads=num_heads,
         d_ff=d_ff,
     )
-    transformer.token_embedding.weight.data = weights['token_embeddings.weight']
 
-    for idx, layer in enumerate(transformer.layers):
-        layer.ln1.weight.data = weights[f'layers.{idx}.ln1.weight']
-
-        q = weights[f'layers.{idx}.attn.q_proj.weight']
-        k = weights[f'layers.{idx}.attn.k_proj.weight']
-        v = weights[f'layers.{idx}.attn.v_proj.weight']
-        Wqkv = torch.cat((q, k, v), dim=0)
-        layer.self_attention.Wqkv.weight.data = Wqkv
-
-        layer.ln2.weight.data = weights[f'layers.{idx}.ln2.weight']
-        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w1.weight']
-        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w2.weight']
-        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w3.weight']
-
-    transformer.ln_f.weight.data = weights['ln_final.weight']
-    transformer.output_projection.weight.data = weights['lm_head.weight']
+    transformer.load_state_dict(state_dict=remap_transformer_weights(weights, num_layers), strict=True)
 
     return transformer.forward(in_indices)
 

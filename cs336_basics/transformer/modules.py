@@ -1,4 +1,5 @@
 import math
+from typing import Mapping
 import torch
 from torch import Tensor
 import einops
@@ -251,7 +252,7 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
             attention_result, "... n_head seq_len d_head -> ... seq_len (n_head d_head)"
         )
         return self.out_projection(combined_attention_result)
-
+    
 
 class PreNormTransformerBlock(torch.nn.Module):
     def __init__(
@@ -297,17 +298,17 @@ class Transformer(torch.nn.Module):
     ):
         super().__init__()
 
-        self.token_embedding = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+        self.token_embeddings = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
     
         self.rope = RotaryPositionalEmbedding(theta=rope_theta, d_k=d_model//num_heads, max_seq_len=context_length,)
 
-        self.layers = [
+        self.layers = torch.nn.ModuleList([
             PreNormTransformerBlock(d_model=d_model,num_heads=num_heads,d_ff=d_ff,)
             for _ in range(num_layers)
-        ]
+        ])
 
-        self.ln_f = RmsNorm(d_model=d_model,)
-        self.output_projection = Linear(out_features=vocab_size, in_features=d_model)
+        self.ln_final = RmsNorm(d_model=d_model,)
+        self.lm_head = Linear(out_features=vocab_size, in_features=d_model)
 
 
     def forward(
@@ -315,12 +316,24 @@ class Transformer(torch.nn.Module):
         in_indices: Int[Tensor, "... seq_len"],
         token_positions: Int[Tensor, "... seq_len"] | None = None,
     ) -> Float[Tensor, "seq_len d_model"]:
-        embedding = self.token_embedding(in_indices)
+        embedding = self.token_embeddings(in_indices)
 
         for layer in self.layers:
-            embedding = layer.forward(embedding, self.rope, token_positions)
+            embedding = layer(embedding, self.rope, token_positions)
         
-        embedding = self.ln_f(embedding)
-        output = self.output_projection(embedding)
+        embedding = self.ln_final(embedding)
+        output = self.lm_head(embedding)
         return softmax(output, dim=-1)
 
+def remap_transformer_weights(weights: Mapping[str, any], num_layers):
+    for idx in range(num_layers):
+        q = weights.pop(f'layers.{idx}.attn.q_proj.weight')
+        k = weights.pop(f'layers.{idx}.attn.k_proj.weight')
+        v = weights.pop(f'layers.{idx}.attn.v_proj.weight')
+        Wqkv = torch.cat((q, k, v), dim=0)
+        weights[f'layers.{idx}.self_attention.Wqkv.weight'] = Wqkv
+
+        weights[f'layers.{idx}.self_attention.out_projection.weight'] = weights.pop(f'layers.{idx}.attn.output_proj.weight')
+        
+    
+    return weights
