@@ -26,7 +26,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_model.py::test_multihead_self_attention_with_rope"
+        "tests/test_model.py::test_transformer_lm"
       ],
     }
   ]

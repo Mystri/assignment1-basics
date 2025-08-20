@@ -19,9 +19,11 @@ from cs336_basics.transformer.modules import (
     Embedding,
     Linear,
     CausalMultiheadSelfAttention,
+    PreNormTransformerBlock,
     RmsNorm,
     RotaryPositionalEmbedding,
     SWiGLU,
+    Transformer,
     scaled_dot_product_attention,
     softmax,
 )
@@ -320,7 +322,22 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    block = PreNormTransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff)
+    
+    block.ln1.weight.data = weights["ln1.weight"]
+
+    Wqkv = torch.cat((weights["attn.q_proj.weight"], weights["attn.k_proj.weight"], weights["attn.v_proj.weight"]), dim=0)
+    block.self_attention.Wqkv.weight.data = Wqkv
+    block.self_attention.out_projection.weight.data = weights["attn.output_proj.weight"]
+
+    block.ln2.weight.data = weights["ln2.weight"]
+
+    block.ffn.w1.weight.data = weights["ffn.w1.weight"]
+    block.ffn.w2.weight.data = weights["ffn.w2.weight"]
+    block.ffn.w3.weight.data = weights["ffn.w3.weight"]
+
+    rope = RotaryPositionalEmbedding(theta=theta, d_k=d_model//num_heads, max_seq_len=max_seq_len)
+    return block.forward(x=in_features, rope=rope)
 
 
 def run_transformer_lm(
@@ -402,8 +419,35 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer = Transformer(
+        vocab_size=vocab_size,
+        context_length=context_length,
+        rope_theta=rope_theta,
+        num_layers=num_layers,
+        d_model=d_model,
+        num_heads=num_heads,
+        d_ff=d_ff,
+    )
+    transformer.token_embedding.weight.data = weights['token_embeddings.weight']
 
+    for idx, layer in enumerate(transformer.layers):
+        layer.ln1.weight.data = weights[f'layers.{idx}.ln1.weight']
+
+        q = weights[f'layers.{idx}.attn.q_proj.weight']
+        k = weights[f'layers.{idx}.attn.k_proj.weight']
+        v = weights[f'layers.{idx}.attn.v_proj.weight']
+        Wqkv = torch.cat((q, k, v), dim=0)
+        layer.self_attention.Wqkv.weight.data = Wqkv
+
+        layer.ln2.weight.data = weights[f'layers.{idx}.ln2.weight']
+        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w1.weight']
+        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w2.weight']
+        layer.ffn.w1.weight.data = weights[f'layers.{idx}.ffn.w3.weight']
+
+    transformer.ln_f.weight.data = weights['ln_final.weight']
+    transformer.output_projection.weight.data = weights['lm_head.weight']
+
+    return transformer.forward(in_indices)
 
 def run_rmsnorm(
     d_model: int,

@@ -7,6 +7,10 @@ from jaxtyping import Float, Bool, Int
 
 
 class Linear(torch.nn.Module):
+    """
+    Basic linear fully-connected block, without a activation function.
+    """
+
     def __init__(self, in_features, out_features, device=None, dtype=None):
         super().__init__()
 
@@ -30,7 +34,7 @@ class Embedding(torch.nn.Module):
         torch.nn.init.trunc_normal_(w, mean=0.0, std=1.0, a=-3, b=3)
         self.weight = torch.nn.Parameter(w)
 
-    def forward(self, x: Float[Tensor, "vocab_size d_model"]) -> Tensor:
+    def forward(self, x: Float[Tensor, "batch_size seq_len"]) -> Float[Tensor, "seq_len embedding_dim"]:
         # select [vocab_size * d_model](last dim, is vectors of indices) values as tensor from the embedding table.
         return self.weight[x]
 
@@ -46,7 +50,11 @@ class RmsNorm(torch.nn.Module):
         in_dtype = x.dtype
         x = x.to(torch.float32)  # Prevent overflow in mean-square calculation
         # Evaluate mean-square against the last dimension, for the input
+        # add epsilon to avoid sqrt on values too small and then division by 0, improving numerical stability.
         rms = torch.sqrt(torch.mean(torch.pow(x, 2), dim=-1, keepdim=True) + self.eps)
+        # Intuition: x / meansquare(x)(norm) * gamma(weight) + beta(bias).
+        # Same weight transformation being applied to each vector in the sequence/batch, so its affine.
+        # We have gamma being learnable.
         # Einsum for element-wise multiplication
         result = (
             einops.einsum(self.weight, x, "d_input, ... d_input -> ... d_input") / rms
@@ -60,6 +68,10 @@ def silu(x: Tensor):
 
 
 class SWiGLU(torch.nn.Module):
+    """
+    SWiGLU-based linear unit.
+    """
+
     def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
         super().__init__()
 
@@ -106,10 +118,9 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         cos: Float[Tensor, "... sequence_length"] = self.cos[token_positions]
         sin: Float[Tensor, "... sequence_length"] = self.sin[token_positions]
 
+        # Split the input tensor into evens and odds
         evens: Float[Tensor, "... sequence_length d_k/2"] = x[..., 0::2]
-        odds: Float[Tensor, "... sequence_length d_k/2"] = x[
-            ..., 1::2
-        ]  # Split the input tensor into evens and odds
+        odds: Float[Tensor, "... sequence_length d_k/2"] = x[..., 1::2]  
 
         result_evens: Float[Tensor, "... sequence_length d_k/2"] = (
             evens * cos - odds * sin
@@ -240,3 +251,76 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
             attention_result, "... n_head seq_len d_head -> ... seq_len (n_head d_head)"
         )
         return self.out_projection(combined_attention_result)
+
+
+class PreNormTransformerBlock(torch.nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        num_heads: int,
+        d_ff: int,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+
+        # Write down the components of each transformer block.
+        self.ln1 = RmsNorm(d_model=d_model, device=device, dtype=dtype)
+        self.self_attention = CausalMultiheadSelfAttention(
+            d_model=d_model, num_heads=num_heads, device=device, dtype=dtype
+        )
+
+        self.ln2 = RmsNorm(d_model=d_model, device=device, dtype=dtype)
+
+        self.ffn = SWiGLU(d_ff=d_ff, d_model=d_model, device=device, dtype=dtype)
+
+    def forward(
+        self,
+        x: Float[Tensor, "... seq_len d_model"],
+        rope: RotaryPositionalEmbedding = None,
+        token_positions: Float[Tensor, "seq_len"] | None = None,
+    ):
+        x = x + self.self_attention.forward(self.ln1(x), rope=rope, token_positions=token_positions)
+        x = x + self.ffn.forward(self.ln2(x))
+        return x
+
+class Transformer(torch.nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        context_length,
+        rope_theta,
+        num_layers,
+        d_model,
+        num_heads,
+        d_ff,
+    ):
+        super().__init__()
+
+        self.token_embedding = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+    
+        self.rope = RotaryPositionalEmbedding(theta=rope_theta, d_k=d_model//num_heads, max_seq_len=context_length,)
+
+        self.layers = [
+            PreNormTransformerBlock(d_model=d_model,num_heads=num_heads,d_ff=d_ff,)
+            for _ in range(num_layers)
+        ]
+
+        self.ln_f = RmsNorm(d_model=d_model,)
+        self.output_projection = Linear(out_features=vocab_size, in_features=d_model)
+
+
+    def forward(
+        self,
+        in_indices: Int[Tensor, "... seq_len"],
+        token_positions: Int[Tensor, "... seq_len"] | None = None,
+    ) -> Float[Tensor, "seq_len d_model"]:
+        embedding = self.token_embedding(in_indices)
+
+        for layer in self.layers:
+            embedding = layer.forward(embedding, self.rope, token_positions)
+        
+        embedding = self.ln_f(embedding)
+        output = self.output_projection(embedding)
+        return softmax(output, dim=-1)
+
