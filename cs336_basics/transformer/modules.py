@@ -323,7 +323,7 @@ class Transformer(torch.nn.Module):
         
         embedding = self.ln_final(embedding)
         output = self.lm_head(embedding)
-        return softmax(output, dim=-1)
+        return output
 
 def remap_transformer_weights(weights: Mapping[str, any], num_layers):
     for idx in range(num_layers):
