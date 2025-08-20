@@ -85,7 +85,8 @@ class SWiGLU(torch.nn.Module):
         self.w3 = Linear(d_model, d_ff, device, dtype)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.w2(silu(self.w1(x)) * self.w3(x))
+        # w2 @ (silu(w1) elementwise_mult w3)
+        return self.w2(silu(self.w1(x)) * self.w3(x)) 
 
 
 class RotaryPositionalEmbedding(torch.nn.Module):
@@ -103,8 +104,8 @@ class RotaryPositionalEmbedding(torch.nn.Module):
         positions = torch.arange(max_seq_len, device=device).unsqueeze(1)
 
         # For pos i and vector pair k, rotate of i * (1 / theta**(2k/d)).
-        # 2 * k / d_k
-        freqs_for_each_pair = torch.arange(0, d_k, 2, device=device) / d_k
+        # for each k, freq = 2 * k / d_k
+        freqs_for_each_pair = torch.arange(0, d_k, step=2, device=device) / d_k
         inv_freqs = theta**-freqs_for_each_pair
         angles = positions * inv_freqs
 
@@ -144,6 +145,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
 
 def softmax(x: Float[Tensor, " ... dim"], dim: int) -> Float[Tensor, " ... dim"]:
+    # keepdim: copy the value by the dimension length times, distributed on the dimension.
     shifted_x = x - torch.max(x, dim=dim, keepdim=True).values
     exp_x = torch.exp(shifted_x)
     return exp_x / exp_x.sum(dim=dim, keepdim=True)
