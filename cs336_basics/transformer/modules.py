@@ -171,6 +171,8 @@ def scaled_dot_product_attention(
         q, k, "... q_seq_len  d_qk, ... kv_seq_len  d_qk -> ... q_seq_len kv_seq_len"
     ) / math.sqrt(d_qk)
     masked_attention_scores = torch.where(mask, attention_scores, float("-inf"))
+    # softmax along kv_seq_len: 
+    # that dimension is going to be combined with the v dimensions.
     softmax_masked_attention_scores = softmax(masked_attention_scores, dim=-1)
 
     # Perform attention_score @ v.
