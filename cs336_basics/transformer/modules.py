@@ -326,7 +326,10 @@ class Transformer(torch.nn.Module):
         embedding = self.ln_final(embedding)
         output = self.lm_head(embedding)
         return output
-
+    
+# There are differences between the namings of the matrices/parameters in 
+# the weights given by the unit testcases, in a weight dict.
+# Remap them into our namings.
 def remap_transformer_weights(weights: Mapping[str, any], num_layers):
     for idx in range(num_layers):
         q = weights.pop(f'layers.{idx}.attn.q_proj.weight')
