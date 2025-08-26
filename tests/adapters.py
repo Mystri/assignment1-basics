@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
-from cs336_basics.transformer.loss import cross_entropy
+from cs336_basics.transformer.utils import cross_entropy, lr_cosine_schedule
 from cs336_basics.transformer.modules import (
     Embedding,
     Linear,
@@ -580,7 +580,13 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return lr_cosine_schedule(
+        it,
+        max_learning_rate,
+        min_learning_rate,
+        warmup_iters,
+        cosine_cycle_iters,
+    )
 
 
 def run_save_checkpoint(
