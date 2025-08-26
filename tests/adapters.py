@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
-from cs336_basics.transformer.utils import cross_entropy, lr_cosine_schedule
+from cs336_basics.transformer.utils import clip_gradient, cross_entropy, lr_cosine_schedule
 from cs336_basics.transformer.modules import (
     Embedding,
     Linear,
@@ -545,7 +545,8 @@ def run_gradient_clipping(
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    clip_gradient(parameters, max_l2_norm)
+
 
 
 def get_adamw_cls() -> type[torch.optim.Optimizer]:

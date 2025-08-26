@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import math
 import torch
 from torch import Tensor
@@ -39,3 +40,31 @@ def lr_cosine_schedule(
         return min_learning_rate + 0.5 * (1 + math.cos((it - warmup_iters) / (cosine_cycle_iters - warmup_iters) * math.pi)) * (max_learning_rate - min_learning_rate)
     else:
         return min_learning_rate
+
+def clip_gradient(
+    parameters: Iterable[torch.nn.Parameter],
+    max_l2_norm: float
+) -> None:
+    # Approach - faster, that uses only one norm call.
+    grads = [p.grad.flatten() for p in parameters if p.grad is not None]
+    if len(grads) == 0:
+        return
+    
+    flat_grads = torch.cat(grads)  
+    actual_l2_norm = flat_grads.norm(2)
+
+    # Approach - more memory-efficient, that only adding scalars together.
+    # for p in parameters:
+    #     if p.grad is not None:
+    #         param_norm = p.grad.norm(2)        # L2 norm of this tensor
+    #         total_norm_sq += param_norm.item() ** 2
+    # total_norm = total_norm_sq ** 0.5
+
+
+    if actual_l2_norm > max_l2_norm:
+        clip_coefficient = max_l2_norm / actual_l2_norm
+        for p in parameters:
+            if p.grad is not None:
+                p.grad.data.mul_(clip_coefficient)
+    
+    

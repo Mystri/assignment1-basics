@@ -17,7 +17,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_model.py"
+        "tests/test_nn_utils.py"
       ],
     },
     {
