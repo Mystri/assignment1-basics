@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from torch import Tensor
 import torch
 import numpy as np
@@ -68,3 +69,51 @@ def load_checkpoint(src, model, optimizer):
     optimizer.load_state_dict(obj["optimizer"])
 
     return obj["iteration"]
+
+
+@dataclass
+class TrainingConfig:
+    # Scheduling
+    training_data: np.ndarray
+    num_words: int
+    batch_size: int = 64
+    context_length: int = 128
+    checkpoint_interval = (1000,)
+
+    # Model - Pure transformer (pre-norm + RoPE)
+    d_model: int = 512
+    num_heads: int = 8
+    ffn_type: str = "gelu"
+    d_ff: int = 2048
+    num_layers: int = 6
+
+    # Optimizer - AdamW + LR cosine decay
+    learning_rate: float = 3e-4
+    betas: tuple[float, float] = (0.9, 0.999)
+    eps: float = 1e-8
+    warmup_iters: int = 4000
+    cosine_cycle_iters: int = 50000
+
+
+def train(
+    config: TrainingConfig,
+    epochs: int,
+):
+    # Create training batches
+    batches = None
+
+    for _ in range(epochs):
+        for step, batch in enumerate(batches):
+            # Reset optimizer grads - each grad produced by a branch are independent.
+            # Run Forward.
+            # Get Loss.
+            # Run Backward.
+            # Clip grad of optimizer.
+            # step optimizer.
+            # step lr scheduler.
+            # Store
+            if step % config.checkpoint_interval == 0:
+                # Store a checkpoint.
+
+                # Store model weights.
+                pass
