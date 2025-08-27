@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
+from cs336_basics.transformer.training import get_batch
 from cs336_basics.transformer.utils import clip_gradient, cross_entropy, lr_cosine_schedule
 from cs336_basics.transformer.modules import (
     Embedding,
@@ -497,7 +498,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return get_batch(x=dataset, batch_size=batch_size, context_length=context_length)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:

@@ -4,7 +4,7 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from .adapters import run_get_batch
+from adapters import run_get_batch
 
 
 def test_get_batch():
