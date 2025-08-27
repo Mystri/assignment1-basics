@@ -47,3 +47,24 @@ def get_batch(
     next_tokens_tensor = torch.from_numpy(next_tokens_np)
 
     return input_sequences_tensor, next_tokens_tensor
+
+
+def save_checkpoint(model, optimizer, iteration, out) -> None:
+    orig_model = model._orig_mod if hasattr(model, "_orig_mod") else model
+
+    obj = {
+        "model": orig_model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "iteration": iteration,
+    }
+    torch.save(obj, out)
+
+
+def load_checkpoint(src, model, optimizer):
+
+    obj = torch.load(src)
+
+    model.load_state_dict(obj["model"])
+    optimizer.load_state_dict(obj["optimizer"])
+
+    return obj["iteration"]

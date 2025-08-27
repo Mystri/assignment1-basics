@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .adapters import get_adamw_cls, run_load_checkpoint, run_save_checkpoint
+from adapters import get_adamw_cls, run_load_checkpoint, run_save_checkpoint
 
 
 class _TestNet(nn.Module):

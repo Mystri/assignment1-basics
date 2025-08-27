@@ -26,7 +26,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_data.py::test_get_batch"
+        "tests/test_serialization.py::test_checkpointing"
       ],
     }
   ]
