@@ -2,11 +2,11 @@ from collections.abc import Iterable
 import math
 import torch
 from torch import Tensor
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 
 def cross_entropy(
-    expected: Float[Tensor, " vocab_size"],
+    expected: Int[Tensor, " seq_len"],
     logits: Float[Tensor, " ... seq_len vocab_size"],
     dim: int = -1,
 ) -> Float:
