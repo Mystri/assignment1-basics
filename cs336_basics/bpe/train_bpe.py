@@ -373,6 +373,7 @@ def train_bpe(
     input_path: str | os.PathLike,
     vocab_size: int,
     special_tokens: list[str],
+    num_chunks: int = -1,
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
 
     start_time = time.time()
@@ -406,6 +407,7 @@ def train_bpe(
     start_time = time.time()
     tasks = []
     with open(input_path, "rb") as f:
+        num_chunks = max(num_chunks, num_processes)
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         # Create a list of tasks, for each chunk.
@@ -443,39 +445,39 @@ def train_bpe(
 
 
 def train_bpe_tinystories_sample():
-    input_path = f"{os.getcwd()}/data/tinystories_sample_5M.txt"
+    input_path = "cs336_basics/data/tinystories_sample_5M.txt"
     vocab_size = 2000
     special_tokens = ["<|endoftext|>"]
 
     vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
 
     # Save the vocabulary and merges to files.
-    write_merges(merges, "cs336_basics/bpe/output/merges_tinystories_sample.pkl")
-    write_vocab(vocab, "cs336_basics/bpe/output/vocab_tinystories_sample.pkl")
+    write_merges(merges, "bpe/merges_tinystories_sample.pkl")
+    write_vocab(vocab, "bpe/vocab_tinystories_sample.pkl")
 
 
 def train_bpe_tinystories():
-    input_path = f"{os.getcwd()}/data/TinyStoriesV2-GPT4-train.txt"
+    input_path = "data/TinyStoriesV2-GPT4-train.txt"
     vocab_size = 10000
     special_tokens = ["<|endoftext|>"]
 
-    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+    vocab, merges = train_bpe(input_path=input_path, num_chunks=10000, vocab_size=vocab_size, special_tokens=special_tokens)
 
     # Save the vocabulary and merges to files.
-    write_merges(merges, "cs336_basics/bpe/output/merges_tinystories.pkl")
-    write_vocab(vocab, "cs336_basics/bpe/output/vocab_tinystories.pkl")
+    write_merges(merges, "bpe/merges_tinystories.pkl")
+    write_vocab(vocab, "bpe/vocab_tinystories.pkl")
 
 
 def train_bpe_expts_owt():
-    input_path = f"{os.getcwd()}/data/owt_train.txt"
+    input_path = "cs336_basics/data/owt_train.txt"
     vocab_size = 32000
     special_tokens = ["<|endoftext|>"]
 
-    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
-
+    vocab, merges = train_bpe(input_path=input_path, num_chunks=10000, vocab_size=vocab_size, special_tokens=special_tokens)
+    
     # Save the vocabulary and merges to files.
-    write_merges(merges, "cs336_basics/bpe/output/merges_owt.pkl")
-    write_vocab(vocab, "cs336_basics/bpe/output/vocab_owt.pkl")
+    write_merges(merges, "bpe/merges_owt.pkl")
+    write_vocab(vocab, "bpe/vocab_owt.pkl")
 
 
 def write_merges(merges, outpath):
@@ -496,4 +498,4 @@ def write_vocab(vocab, outpath):
 
 if __name__ == "__main__":
     # Example usage
-    train_bpe_tinystories_sample()
+    train_bpe_expts_owt()
