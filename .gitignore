@@ -163,10 +163,9 @@ cython_debug/
 *.zip
 
 # Ignore data files
-/data/
+*/data/
 # Ignore output files from BPE training
 cs336_basics/bpe/output/*.txt
 cs336_basics/bpe/output/*.pkl
 
-training/
-checkpoints/
+*/checkpoints/
