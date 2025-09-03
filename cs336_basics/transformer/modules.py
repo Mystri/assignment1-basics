@@ -14,13 +14,13 @@ class Linear(torch.nn.Module):
     Basic linear fully-connected block, without a activation function.
     """
 
-    def __init__(self, in_features, out_features, device=None, dtype=None):
+    def __init__(self, in_features, out_features, device: str| None, dtype: str| None):
         super().__init__()
 
         mean = 0.0
         std = math.sqrt(2 / (in_features + out_features))
 
-        w = torch.empty(out_features, in_features)
+        w = torch.empty(out_features, in_features, device=device, dtype=dtype)
         torch.nn.init.trunc_normal_(w, mean=mean, std=std, a=-3 * std, b=3 * std)
 
         self.weight = torch.nn.Parameter(w)
@@ -30,10 +30,10 @@ class Linear(torch.nn.Module):
 
 
 class Embedding(torch.nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, device=None, dtype=None):
+    def __init__(self, num_embeddings, embedding_dim, device: str| None, dtype: str| None):
         super().__init__()
 
-        w = torch.empty(num_embeddings, embedding_dim)
+        w = torch.empty(num_embeddings, embedding_dim, device=device, dtype=dtype)
         torch.nn.init.trunc_normal_(w, mean=0.0, std=1.0, a=-3, b=3)
         self.weight = torch.nn.Parameter(w)
 
@@ -45,10 +45,12 @@ class Embedding(torch.nn.Module):
 
 
 class RmsNorm(torch.nn.Module):
-    def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
+    def __init__(self, d_model: int, eps: float = 1e-5, device: str| None=None, dtype: str| None=None):
         super().__init__()
 
-        self.weight = torch.nn.Parameter(torch.ones(d_model))
+        self.weight = torch.nn.Parameter(
+            torch.ones(d_model, device=device, dtype=dtype)
+        )
         self.eps = eps
 
     def forward(self, x: Tensor) -> Tensor:
@@ -77,10 +79,10 @@ class SWiGLU(torch.nn.Module):
     SWiGLU-based linear unit.
     """
 
-    def __init__(self, d_model: int, d_ff: int = None, device=None, dtype=None):
+    def __init__(self, d_model: int, d_ff: int = -1, device: str| None=None, dtype: str| None=None):
         super().__init__()
 
-        if d_ff == None:
+        if d_ff == -1:
             d_ff = d_model * 8 // 3
             d_ff = math.ceil(d_ff / 64) * 64  # Ensure d_ff is a multiple of 64
 
@@ -194,8 +196,8 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
         self,
         d_model: int,
         num_heads: int,
-        device=None,
-        dtype=None,
+        device: str | None = None,
+        dtype: str | None = None,
     ):
         super().__init__()
 
@@ -218,7 +220,7 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
     def forward(
         self,
         x: Float[Tensor, "... seq_len d_v"],
-        rope: RotaryPositionalEmbedding,
+        rope: RotaryPositionalEmbedding |None,
         token_positions: Int[Tensor, " ... sequence_length"] | None = None,
     ) -> Float[Tensor, "... seq_len d_v"]:
 
@@ -252,7 +254,12 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
 
         # Create Mask for the head view.
         mask = torch.tril(
-            torch.ones(seq_len, seq_len, device=x.device, dtype=torch.bool)
+            input=torch.ones(
+                seq_len,
+                seq_len,
+                device=x.device,
+                dtype=torch.bool,
+            )
         )
 
         attention_result = scaled_dot_product_attention(q, k, v, mask)
@@ -268,8 +275,8 @@ class PreNormTransformerBlock(torch.nn.Module):
         d_model: int,
         num_heads: int,
         d_ff: int,
-        device=None,
-        dtype=None,
+        device: str| None,
+        dtype: str| None,
         ffn_type=str,
     ):
         super().__init__()
@@ -287,7 +294,7 @@ class PreNormTransformerBlock(torch.nn.Module):
     def forward(
         self,
         x: Float[Tensor, "... seq_len d_model"],
-        rope: RotaryPositionalEmbedding = None,
+        rope: RotaryPositionalEmbedding|None = None,
         token_positions: Float[Tensor, "seq_len"] | None = None,
     ):
         x = x + self.self_attention.forward(
@@ -308,19 +315,26 @@ class Transformer(torch.nn.Module):
         num_heads,
         ffn_type,
         d_ff,
+        device,
+        dtype,
     ):
         super().__init__()
 
         self.context_length = context_length
 
         self.token_embeddings = Embedding(
-            num_embeddings=vocab_size, embedding_dim=d_model
+            num_embeddings=vocab_size,
+            embedding_dim=d_model,
+            device=device,
+            dtype=dtype,
         )
 
         self.rope = RotaryPositionalEmbedding(
             theta=rope_theta,
             d_k=d_model // num_heads,
             max_seq_len=context_length,
+            device=device,
+            dtype=dtype,
         )
 
         self.layers = torch.nn.ModuleList(
@@ -330,17 +344,21 @@ class Transformer(torch.nn.Module):
                     num_heads=num_heads,
                     d_ff=d_ff,
                     ffn_type=ffn_type,
+                    device=device,
+                    dtype=dtype,
                 )
                 for _ in range(num_layers)
             ]
         )
 
-        self.ln_final = RmsNorm(
-            d_model=d_model,
+        self.ln_final = RmsNorm(d_model=d_model, device=device, dtype=dtype)
+        self.lm_head = Linear(
+            out_features=vocab_size, in_features=d_model, device=device, dtype=dtype
         )
-        self.lm_head = Linear(out_features=vocab_size, in_features=d_model)
 
-    def __init__(self, config: TransformerConfig):
+    def __init__(
+        self, config: TransformerConfig, device: str = None, dtype: str = None
+    ):
         self.init(
             vocab_size=config.vocab_size,
             context_length=config.context_length,
@@ -350,6 +368,8 @@ class Transformer(torch.nn.Module):
             num_heads=config.num_heads,
             ffn_type=config.ffn_type,
             d_ff=config.d_ff,
+            device=device,
+            dtype=dtype,
         )
 
     def forward(

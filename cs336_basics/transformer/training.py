@@ -5,9 +5,8 @@ import torch
 import numpy as np
 from datetime import datetime
 
-import tqdm
+from tqdm import tqdm
 
-from cs336_basics.bpe.tokenizer import Tokenizer
 from cs336_basics.transformer.configs import TrainingConfig
 from cs336_basics.transformer.modules import Transformer
 from cs336_basics.transformer.optimizers import AdamW
@@ -19,7 +18,7 @@ from cs336_basics.transformer.utils import (
 
 
 def get_batch(
-    x: np.ndarray, batch_size: int, context_length: int
+    x: np.ndarray, batch_size: int, context_length: int, device=None, dtype=None
 ) -> tuple[Tensor, Tensor]:
     """
     Takes a numpy array of token IDs, batches them, and returns a pair of tensors:
@@ -58,8 +57,10 @@ def get_batch(
         input_sequences_np[index_batch] = x[start : start + context_length]
         next_tokens_np[index_batch] = x[start + 1 : start + context_length + 1]
 
-    input_sequences_tensor = torch.from_numpy(input_sequences_np)
-    next_tokens_tensor = torch.from_numpy(next_tokens_np)
+    input_sequences_tensor = torch.from_numpy(input_sequences_np).to(
+        device=device, dtype=dtype
+    )
+    next_tokens_tensor = torch.from_numpy(next_tokens_np).to(device=device, dtype=dtype)
 
     return input_sequences_tensor, next_tokens_tensor
 
@@ -90,8 +91,19 @@ def train(
     data,
     config: TrainingConfig,
 ):
+    device = "cpu"
+
+    print(f"PyTorch version: {torch.__version__}")
+    print(f"CUDA available: {torch.cuda.is_available()}")
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"CUDA capability: {torch.cuda.get_device_capability()}")
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+
+    if torch.cuda.is_available():
+        device = "cuda"
 
     model = Transformer(config.model)
+    model.to(device=device)
 
     optimizer = AdamW(
         params=model.parameters(),
@@ -110,7 +122,11 @@ def train(
     # Create training batches
     for step in tqdm(range(config.steps), desc=f"Training steps"):
         batches = get_batch(
-            data, config.batch_size, config.model.context_length
+            data,
+            config.batch_size,
+            config.model.context_length,
+            device=device,
+            dtype=None,
         )
 
         input_sequences_tensor, next_tokens_tensor = batches
