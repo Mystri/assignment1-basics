@@ -1,19 +1,18 @@
 from dataclasses import dataclass
 
 import torch
-from cs336_basics.bpe.tokenizer import Tokenizer
+from cs336_basics.bpe.Tokenizer import Tokenizer
 from cs336_basics.transformer.configs import DecodingConfig
 from cs336_basics.transformer.modules import Transformer
 from cs336_basics.transformer.training import load_checkpoint
 
 
-def softmax_with_temperature(
-    x: torch.Tensor,
-    temperature: float,
-):
-    shifted_x_with_temp = torch.pow(x - torch.max(x, keepdim=True).values, -temperature)
-    exp_x_with_temp = torch.exp(shifted_x_with_temp)
-    return exp_x_with_temp / torch.sum(exp_x_with_temp, keepdim=True)
+def softmax_with_temperature(x: torch.Tensor, temperature: float, dim: int = -1):
+    x = torch.div(x, temperature)
+    shifted_x = x - torch.max(x, dim=dim, keepdim=True).values
+
+    exp_x_with_temp = torch.exp(shifted_x)
+    return exp_x_with_temp / torch.sum(exp_x_with_temp, dim=dim, keepdim=True)
 
 
 def decode_single_prompt(
@@ -36,7 +35,7 @@ def decode_single_prompt(
             )
 
             # Get tokenized output
-            logits = model(tokenized_input)
+            logits = model(tokenized_input)[-1, :]
 
             # Apply softmax with temperature
             words_prob_dist = softmax_with_temperature(
@@ -50,7 +49,7 @@ def decode_single_prompt(
             # Find the cumulative sum (prefix sum) of the result distribution
             cumsum = torch.cumsum(sorted_prob_dist, dim=-1)
             # Find the index that has prefix sum of "p" of Top-p.
-            cutoff_idx = torch.searchsorted(cumsum, config.p)
+            cutoff_idx = torch.searchsorted(cumsum, config.p, )
 
             trimmed_prob_dist = sorted_prob_dist[:cutoff_idx]
             trimmed_tokens = corresponding_tokens[:cutoff_idx]
@@ -63,36 +62,11 @@ def decode_single_prompt(
             # Convert to an actual token id, an int.
             next_token = trimmed_tokens[next_token_idx].item()
 
-            if next_token.item() == eot:
+            if next_token == eot:
                 break
 
             tokenized_input.append(next_token)
+            print("Current output:")
+            print(tokenizer.decode(tokenized_input))
 
     return tokenizer.decode(tokenized_input)
-
-
-if __name__ == "__main__":
-    vocab_path = "cs336_basics/bpe/output/vocab.pkl"
-    merges_path = "cs336_basics/bpe/output/merges.pkl"
-
-    tokenizer = Tokenizer.from_files(
-        vocab_filepath=vocab_path,
-        merges_filepath=merges_path,
-        special_tokens=["<|endoftext|>"],
-    )
-
-    config = DecodingConfig()
-
-    model = Transformer(
-
-    )
-
-    checkpoint = "/.../latest.pt"
-    load_checkpoint(checkpoint, model)
-
-    decode_single_prompt(
-        model=model,
-        tokenizer=tokenizer,
-        prompt="The ",
-        config=DecodingConfig
-    )

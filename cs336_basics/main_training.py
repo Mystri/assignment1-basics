@@ -5,8 +5,6 @@ from cs336_basics.transformer.training import train
 
 if __name__ == "__main__":
     config = TrainingConfig()
-    config.steps = 1000
-    config.logging_interval = 10
 
     project_root = "/root/autodl-tmp/assignment1-basics/cs336_basics/"
     tokenizer = Tokenizer.from_files(

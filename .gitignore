@@ -168,4 +168,5 @@ cython_debug/
 cs336_basics/bpe/output/*.txt
 cs336_basics/bpe/output/*.pkl
 
+# Checkpoints
 */checkpoints/

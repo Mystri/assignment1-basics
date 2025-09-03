@@ -114,8 +114,8 @@ def train(
     )
 
     train_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    train_folder = f"{config.checkpoints_dir}/train_{train_time}"
-    os.makedirs(train_folder, exist_ok=True)
+    train_working_directory = f"{config.checkpoints_dir}/train_{train_time}"
+    os.makedirs(train_working_directory, exist_ok=True)
 
     print("Training starts:")
 
@@ -162,7 +162,7 @@ def train(
                 model=model,
                 optimizer=optimizer,
                 iteration=step,
-                out=os.path.join(config.checkpoints_dir, checkpoint_filename),
+                out=os.path.join(train_working_directory, checkpoint_filename),
             )
         # Print progress.
         if step % config.logging_interval == 0:
