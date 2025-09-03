@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from tqdm import tqdm
 
-from cs336_basics.bpe.tokenizer import Tokenizer
+from cs336_basics.bpe.Tokenizer import Tokenizer
 from cs336_basics.bpe.train_bpe import train_bpe
 from cs336_basics.transformer.training import get_batch, load_checkpoint, save_checkpoint
 from cs336_basics.transformer.utils import clip_gradient, cross_entropy, lr_cosine_schedule

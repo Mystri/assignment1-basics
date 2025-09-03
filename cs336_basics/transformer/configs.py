@@ -13,6 +13,8 @@ class TransformerConfig:
     ffn_type: str = "GeLU"
     d_ff: int = 2048
     num_layers: int = 6
+    context_length: int = 128
+    
 
 @dataclass
 class DecodingConfig:
@@ -21,27 +23,25 @@ class DecodingConfig:
     # Top-p sampling.
     p: float = 0.9
 
-    model: TransformerConfig
+    model: TransformerConfig | None = None
 
 
 @dataclass
 class TrainingConfig:
     # Scheduling
     steps: int = 10000
-    training_data: np.ndarray
-    num_words: int
+    num_words: int = 32
     batch_size: int = 64
-    context_length: int = 128
     checkpoint_interval = 1000
     logging_interval = 1000
 
     # Tokenizer
     vocab_filepath: str = ""
     merges_filepath: str = ""
-    special_tokens: list[str] | None = (None,)
+    special_tokens: list[str] | None = None
 
     # Model - Pure transformer (pre-norm + RoPE)
-    model: TransformerConfig
+    model: TransformerConfig | None = None
 
     # Optimizer - AdamW + LR cosine decay
     learning_rate: float = 3e-4
@@ -52,7 +52,7 @@ class TrainingConfig:
     cosine_cycle_iters: int = 50000
 
     # Gradient clipping
-    max_l2_norm: float
+    max_l2_norm: float = 100
 
     # LR cosine scheduling
     max_learning_rate = 3e-4

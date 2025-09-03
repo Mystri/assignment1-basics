@@ -87,6 +87,7 @@ def load_checkpoint(src, model, optimizer=None):
 
 
 def train(
+    data,
     config: TrainingConfig,
 ):
 
@@ -101,13 +102,15 @@ def train(
     )
 
     train_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    train_folder = f"{config.checkpoint_dir}/train_{train_time}"
+    train_folder = f"{config.checkpoints_dir}/train_{train_time}"
     os.makedirs(train_folder, exist_ok=True)
 
+    print("Training starts:")
+
     # Create training batches
-    for step in tqdm(config.steps, desc=f"Training steps"):
+    for step in tqdm(range(config.steps), desc=f"Training steps"):
         batches = get_batch(
-            config.training_data, config.batch_size, config.context_length
+            data, config.batch_size, config.model.context_length
         )
 
         input_sequences_tensor, next_tokens_tensor = batches
@@ -143,7 +146,7 @@ def train(
                 model=model,
                 optimizer=optimizer,
                 iteration=step,
-                out=os.path.join(config.train_folder, checkpoint_filename),
+                out=os.path.join(config.checkpoints_dir, checkpoint_filename),
             )
         # Print progress.
         if step % config.logging_interval == 0:

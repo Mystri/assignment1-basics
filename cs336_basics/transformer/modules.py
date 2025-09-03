@@ -270,6 +270,7 @@ class PreNormTransformerBlock(torch.nn.Module):
         d_ff: int,
         device=None,
         dtype=None,
+        ffn_type=str,
     ):
         super().__init__()
 
@@ -297,7 +298,7 @@ class PreNormTransformerBlock(torch.nn.Module):
 
 
 class Transformer(torch.nn.Module):
-    def __init__(
+    def init(
         self,
         vocab_size,
         context_length,
@@ -305,6 +306,7 @@ class Transformer(torch.nn.Module):
         num_layers,
         d_model,
         num_heads,
+        ffn_type,
         d_ff,
     ):
         super().__init__()
@@ -327,6 +329,7 @@ class Transformer(torch.nn.Module):
                     d_model=d_model,
                     num_heads=num_heads,
                     d_ff=d_ff,
+                    ffn_type=ffn_type,
                 )
                 for _ in range(num_layers)
             ]
@@ -338,13 +341,14 @@ class Transformer(torch.nn.Module):
         self.lm_head = Linear(out_features=vocab_size, in_features=d_model)
 
     def __init__(self, config: TransformerConfig):
-        self.__init__(
+        self.init(
             vocab_size=config.vocab_size,
             context_length=config.context_length,
             rope_theta=config.rope_theta,
             num_layers=config.num_layers,
             d_model=config.d_model,
             num_heads=config.num_heads,
+            ffn_type=config.ffn_type,
             d_ff=config.d_ff,
         )
 
