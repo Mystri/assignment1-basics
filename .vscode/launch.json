@@ -15,7 +15,7 @@
       "name": "Python Debugger: Main.py",
       "type": "debugpy",
       "request": "launch",
-      "program": "./cs336_basics/main.py",
+      "program": "./cs336_basics/main_training.py",
       "console": "integratedTerminal"
     },
     {
