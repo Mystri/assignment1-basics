@@ -6,6 +6,8 @@ import einops
 
 from jaxtyping import Float, Bool, Int
 
+from cs336_basics.transformer.configs import TransformerConfig
+
 
 class Linear(torch.nn.Module):
     """
@@ -35,7 +37,9 @@ class Embedding(torch.nn.Module):
         torch.nn.init.trunc_normal_(w, mean=0.0, std=1.0, a=-3, b=3)
         self.weight = torch.nn.Parameter(w)
 
-    def forward(self, x: Float[Tensor, "batch_size seq_len"]) -> Float[Tensor, "seq_len embedding_dim"]:
+    def forward(
+        self, x: Float[Tensor, "batch_size seq_len"]
+    ) -> Float[Tensor, "seq_len embedding_dim"]:
         # select [vocab_size * d_model](last dim, is vectors of indices) values as tensor from the embedding table.
         return self.weight[x]
 
@@ -86,7 +90,7 @@ class SWiGLU(torch.nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # w2 @ (silu(w1) elementwise_mult w3)
-        return self.w2(silu(self.w1(x)) * self.w3(x)) 
+        return self.w2(silu(self.w1(x)) * self.w3(x))
 
 
 class RotaryPositionalEmbedding(torch.nn.Module):
@@ -122,7 +126,7 @@ class RotaryPositionalEmbedding(torch.nn.Module):
 
         # Split the input tensor into evens and odds
         evens: Float[Tensor, "... sequence_length d_k/2"] = x[..., 0::2]
-        odds: Float[Tensor, "... sequence_length d_k/2"] = x[..., 1::2]  
+        odds: Float[Tensor, "... sequence_length d_k/2"] = x[..., 1::2]
 
         result_evens: Float[Tensor, "... sequence_length d_k/2"] = (
             evens * cos - odds * sin
@@ -171,7 +175,7 @@ def scaled_dot_product_attention(
         q, k, "... q_seq_len  d_qk, ... kv_seq_len  d_qk -> ... q_seq_len kv_seq_len"
     ) / math.sqrt(d_qk)
     masked_attention_scores = torch.where(mask, attention_scores, float("-inf"))
-    # softmax along kv_seq_len: 
+    # softmax along kv_seq_len:
     # that dimension is going to be combined with the v dimensions.
     softmax_masked_attention_scores = softmax(masked_attention_scores, dim=-1)
 
@@ -256,7 +260,7 @@ class CausalMultiheadSelfAttention(torch.nn.Module):
             attention_result, "... n_head seq_len d_head -> ... seq_len (n_head d_head)"
         )
         return self.out_projection(combined_attention_result)
-    
+
 
 class PreNormTransformerBlock(torch.nn.Module):
     def __init__(
@@ -285,9 +289,12 @@ class PreNormTransformerBlock(torch.nn.Module):
         rope: RotaryPositionalEmbedding = None,
         token_positions: Float[Tensor, "seq_len"] | None = None,
     ):
-        x = x + self.self_attention.forward(self.ln1(x), rope=rope, token_positions=token_positions)
+        x = x + self.self_attention.forward(
+            self.ln1(x), rope=rope, token_positions=token_positions
+        )
         x = x + self.ffn.forward(self.ln2(x))
         return x
+
 
 class Transformer(torch.nn.Module):
     def __init__(
@@ -302,18 +309,44 @@ class Transformer(torch.nn.Module):
     ):
         super().__init__()
 
-        self.token_embeddings = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
-    
-        self.rope = RotaryPositionalEmbedding(theta=rope_theta, d_k=d_model//num_heads, max_seq_len=context_length,)
+        self.context_length = context_length
 
-        self.layers = torch.nn.ModuleList([
-            PreNormTransformerBlock(d_model=d_model,num_heads=num_heads,d_ff=d_ff,)
-            for _ in range(num_layers)
-        ])
+        self.token_embeddings = Embedding(
+            num_embeddings=vocab_size, embedding_dim=d_model
+        )
 
-        self.ln_final = RmsNorm(d_model=d_model,)
+        self.rope = RotaryPositionalEmbedding(
+            theta=rope_theta,
+            d_k=d_model // num_heads,
+            max_seq_len=context_length,
+        )
+
+        self.layers = torch.nn.ModuleList(
+            [
+                PreNormTransformerBlock(
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    d_ff=d_ff,
+                )
+                for _ in range(num_layers)
+            ]
+        )
+
+        self.ln_final = RmsNorm(
+            d_model=d_model,
+        )
         self.lm_head = Linear(out_features=vocab_size, in_features=d_model)
 
+    def __init__(self, config: TransformerConfig):
+        self.__init__(
+            vocab_size=config.vocab_size,
+            context_length=config.context_length,
+            rope_theta=config.rope_theta,
+            num_layers=config.num_layers,
+            d_model=config.d_model,
+            num_heads=config.num_heads,
+            d_ff=config.d_ff,
+        )
 
     def forward(
         self,
@@ -324,23 +357,25 @@ class Transformer(torch.nn.Module):
 
         for layer in self.layers:
             embedding = layer(embedding, self.rope, token_positions)
-        
+
         embedding = self.ln_final(embedding)
         output = self.lm_head(embedding)
         return output
-    
-# There are differences between the namings of the matrices/parameters in 
+
+
+# There are differences between the namings of the matrices/parameters in
 # the weights given by the unit testcases, in a weight dict.
 # Remap them into our namings.
 def remap_transformer_weights(weights: Mapping[str, any], num_layers):
     for idx in range(num_layers):
-        q = weights.pop(f'layers.{idx}.attn.q_proj.weight')
-        k = weights.pop(f'layers.{idx}.attn.k_proj.weight')
-        v = weights.pop(f'layers.{idx}.attn.v_proj.weight')
+        q = weights.pop(f"layers.{idx}.attn.q_proj.weight")
+        k = weights.pop(f"layers.{idx}.attn.k_proj.weight")
+        v = weights.pop(f"layers.{idx}.attn.v_proj.weight")
         Wqkv = torch.cat((q, k, v), dim=0)
-        weights[f'layers.{idx}.self_attention.Wqkv.weight'] = Wqkv
+        weights[f"layers.{idx}.self_attention.Wqkv.weight"] = Wqkv
 
-        weights[f'layers.{idx}.self_attention.out_projection.weight'] = weights.pop(f'layers.{idx}.attn.output_proj.weight')
-        
-    
+        weights[f"layers.{idx}.self_attention.out_projection.weight"] = weights.pop(
+            f"layers.{idx}.attn.output_proj.weight"
+        )
+
     return weights
