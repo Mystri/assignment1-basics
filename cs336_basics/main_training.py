@@ -18,4 +18,4 @@ if __name__ == "__main__":
     with open('/root/autodl-tmp/assignment1-basics/cs336_basics/data/tinystories_sample.txt') as f:
         contents = f.read()
 
-        train(data=tokenizer.encode(contents), config=config)
+        train(data=tokenizer.encode(contents), config=config, project_name="tinystories_sample")

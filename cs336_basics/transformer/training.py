@@ -16,6 +16,8 @@ from cs336_basics.transformer.utils import (
     lr_cosine_schedule,
 )
 
+import swanlab
+
 
 def get_batch(
     x: np.ndarray, batch_size: int, context_length: int, device=None, dtype=None
@@ -90,6 +92,7 @@ def load_checkpoint(src, model, optimizer=None):
 def train(
     data,
     config: TrainingConfig,
+    project_name="",
 ):
     device = "cpu"
 
@@ -98,6 +101,11 @@ def train(
     print(f"CUDA version: {torch.version.cuda}")
     print(f"CUDA capability: {torch.cuda.get_device_capability()}")
     print(f"GPU: {torch.cuda.get_device_name(0)}")
+
+    swanlab.init(
+        project=project_name,
+        config=config.__dict__  # Log your configuration
+    )
 
     if torch.cuda.is_available():
         device = "cuda"
@@ -164,6 +172,15 @@ def train(
                 iteration=step,
                 out=os.path.join(train_working_directory, checkpoint_filename),
             )
+            # Log checkpoint as artifact
+            # artifact = wandb.Artifact(
+            #     name=f"model-checkpoint-{step}",
+            #     type="model",
+            #     description=f"Model checkpoint at step {step}"
+            # )
+            # artifact.add_file(checkpoint_path)
+            # wandb.log_artifact(artifact)
+            
         # Print progress.
         if step % config.logging_interval == 0:
             print(
@@ -172,3 +189,9 @@ def train(
                 f"Loss: {loss:.4f} | "
                 f"LR: {new_lr:.6f}"
             )
+            swanlab.log({
+                "loss": loss.item(),
+                "learning_rate": new_lr,
+                "step": step
+            })
+    swanlab.finish()
