@@ -49,10 +49,14 @@ def decode_single_prompt(
             # Find the cumulative sum (prefix sum) of the result distribution
             cumsum = torch.cumsum(sorted_prob_dist, dim=-1)
             # Find the index that has prefix sum of "p" of Top-p.
-            cutoff_idx = torch.searchsorted(cumsum, config.p, )
+            cutoff_idx = torch.searchsorted(
+                cumsum,
+                config.p,
+            )
 
-            trimmed_prob_dist = sorted_prob_dist[:cutoff_idx]
-            trimmed_tokens = corresponding_tokens[:cutoff_idx]
+            # Make sure something will be produced even the first token has probability > p.
+            trimmed_prob_dist = sorted_prob_dist[:cutoff_idx + 1]
+            trimmed_tokens = corresponding_tokens[:cutoff_idx + 1]
 
             # Normalize, since trimmed_prob_dist sums to p, not 1
             trimmed_prob_dist /= torch.sum(trimmed_prob_dist)

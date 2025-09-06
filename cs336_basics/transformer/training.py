@@ -7,7 +7,11 @@ from datetime import datetime
 
 from tqdm import tqdm
 
-from cs336_basics.transformer.configs import TrainingConfig
+from cs336_basics.transformer.configs import (
+    TrainingConfig,
+    model_size,
+    peak_memory_cost,
+)
 from cs336_basics.transformer.modules import Transformer
 from cs336_basics.transformer.optimizers import AdamW
 from cs336_basics.transformer.utils import (
@@ -38,7 +42,7 @@ def get_batch(
         # or
         x = np.memmap("tokens.dat", dtype=np.int64, mode="r", shape=(total_tokens,))
 
-        input_batch, next_batch = load_data(x, batch_size=32, context_length=128)
+        input_batch, next_batch = get_batch(x, batch_size=32, context_length=128)
     - Ensure that the dtype of the loaded array matches the saved,
       and verify that token values are within the expected vocabulary size.
     """
@@ -90,11 +94,32 @@ def load_checkpoint(src, model, optimizer=None):
 
 
 def train(
-    data,
+    train_data: np.memmap,
+    valid_data: np.memmap,
     config: TrainingConfig,
     project_name="",
 ):
+
+    # Swanlab init
+    swanlab.init(project=project_name, config=config.__dict__)  # Log your configuration
+
+    # Set up device and print drivers info.
     device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+        allocated = torch.cuda.memory_allocated() / 1024**3
+        cached = torch.cuda.memory_reserved() / 1024**3
+        max_allocated = torch.cuda.max_memory_allocated() / 1024**3
+        max_cached = torch.cuda.max_memory_reserved() / 1024**3
+        total_memory = torch.cuda.get_device_properties().total_memory / 1024**3
+        free_memory = total_memory - allocated
+        
+        print(f"PyTorch Allocated: {allocated:.2f} GB")
+        print(f"PyTorch Cached: {cached:.2f} GB")
+        print(f"PyTorch Max Allocated: {max_allocated:.2f} GB")
+        print(f"PyTorch Max Cached: {max_cached:.2f} GB")
+        print(f"Free: {free_memory:.2f} GB")
+        print(f"Total: {total_memory:.2f} GB")
 
     print(f"PyTorch version: {torch.__version__}")
     print(f"CUDA available: {torch.cuda.is_available()}")
@@ -102,16 +127,13 @@ def train(
     print(f"CUDA capability: {torch.cuda.get_device_capability()}")
     print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    swanlab.init(
-        project=project_name,
-        config=config.__dict__  # Log your configuration
-    )
-
-    if torch.cuda.is_available():
-        device = "cuda"
-
+    # Initialize the model and optimizer.
     model = Transformer(config.model)
-    model.to(device=device)
+    model.to(device=device, dtype=torch.half)
+    print(f"Model size: {model_size(config.model)}")
+    print(
+        f"Estimated training peak memory cost: {peak_memory_cost(config, dtype=torch.half)}"
+    )
 
     optimizer = AdamW(
         params=model.parameters(),
@@ -130,7 +152,7 @@ def train(
     # Create training batches
     for step in tqdm(range(config.steps), desc=f"Training steps"):
         batches = get_batch(
-            data,
+            train_data,
             config.batch_size,
             config.model.context_length,
             device=device,
@@ -180,7 +202,7 @@ def train(
             # )
             # artifact.add_file(checkpoint_path)
             # wandb.log_artifact(artifact)
-            
+
         # Print progress.
         if step % config.logging_interval == 0:
             print(
@@ -189,9 +211,12 @@ def train(
                 f"Loss: {loss:.4f} | "
                 f"LR: {new_lr:.6f}"
             )
-            swanlab.log({
-                "loss": loss.item(),
-                "learning_rate": new_lr,
-                "step": step
-            })
+            
+        checkpoint_filename = "final.pt"
+        save_checkpoint(
+            model=model,
+            optimizer=optimizer,
+            iteration=step,
+            out=os.path.join(train_working_directory, checkpoint_filename),
+        )
     swanlab.finish()

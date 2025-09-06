@@ -24,7 +24,7 @@
       "request": "launch",
       "module": "pytest",
       "args": [
-        "tests/test_nn_utils.py"
+        "tests/test_train_bpe.py"
       ],
     },
     {

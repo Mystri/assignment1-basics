@@ -18,11 +18,13 @@ if __name__ == "__main__":
         special_tokens=["<|endoftext|>"],
     )
 
+    print(tokenizer.encode("<|endoftext|>"))
+
     config = DecodingConfig()
 
     model = Transformer(config=TransformerConfig(vocab_size=len(tokenizer.vocab)))
 
-    checkpoint = f"{project_root}/checkpoints/latest.pt"
+    checkpoint = f"{project_root}checkpoints/train_20250906_214727/step_3000.pt"
     load_checkpoint(checkpoint, model)
-
-    decode_single_prompt(model=model, tokenizer=tokenizer, prompt="The ", config=config)
+    while True:
+        decode_single_prompt(model=model, tokenizer=tokenizer, prompt="The ", config=config)

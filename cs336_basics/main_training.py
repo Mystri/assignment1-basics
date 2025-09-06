@@ -1,3 +1,4 @@
+import numpy as np
 from cs336_basics.bpe.Tokenizer import Tokenizer
 from cs336_basics.transformer.configs import TrainingConfig, TransformerConfig
 from cs336_basics.transformer.training import train
@@ -14,8 +15,11 @@ if __name__ == "__main__":
     )
     config.model = TransformerConfig(vocab_size=len(tokenizer.vocab))
 
-    # train small small batch
-    with open('/root/autodl-tmp/assignment1-basics/cs336_basics/data/tinystories_sample.txt') as f:
-        contents = f.read()
+    # train normal batch
+    train_text = '/root/autodl-tmp/assignment1-basics/cs336_basics/data/TinyStoriesV2-GPT4-train.txt'
+    valid_text = '/root/autodl-tmp/assignment1-basics/cs336_basics/data/TinyStoriesV2-GPT4-valid.txt'
 
-        train(data=tokenizer.encode(contents), config=config, project_name="tinystories_sample")
+    train_data = np.memmap(filename=train_text, mode="r")
+    valid_data = np.memmap(filename=valid_text, mode="r")
+
+    train(train_data=train_data, valid_data=valid_data, config=config, project_name="tinystories_sample")

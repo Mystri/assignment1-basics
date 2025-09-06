@@ -82,6 +82,7 @@ def test_train_bpe_special_tokens(snapshot):
     ]
     for word_bytes in vocabs_without_specials:
         assert b"<|" not in word_bytes
+        assert b"<" not in word_bytes
 
     snapshot.assert_match(
         {

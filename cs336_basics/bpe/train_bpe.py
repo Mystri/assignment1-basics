@@ -104,9 +104,12 @@ def pretokenize_executor(task: Task) -> Counter[Word]:
 
         if piece in special_tokens:
             # If the piece is a special token, count its id.
+            print("Special token is handeled correctly by split")
             token_id = special_token_vocabulary[piece]
             words_list.append((token_id,))
         else:
+            if "<|endoftext|>" in piece:
+                print("Special token is found in normal piece")
             # The piece should be small, so no lazy loading is needed. find all words in it.
             for word_str in word_splitter_regex.findall(piece):
                 if word_str:
@@ -443,9 +446,10 @@ def train_bpe(
 
     return starter_vocab, merge_result
 
+project_root = "/root/autodl-tmp/assignment1-basics/cs336_basics/"
 
 def train_bpe_tinystories_sample():
-    input_path = "cs336_basics/data/tinystories_sample_5M.txt"
+    input_path = f"{project_root}/data/tinystories_sample_5M.txt"
     vocab_size = 2000
     special_tokens = ["<|endoftext|>"]
 
@@ -457,27 +461,27 @@ def train_bpe_tinystories_sample():
 
 
 def train_bpe_tinystories():
-    input_path = "data/TinyStoriesV2-GPT4-train.txt"
+    input_path = f"{project_root}data/TinyStoriesV2-GPT4-train.txt"
     vocab_size = 10000
     special_tokens = ["<|endoftext|>"]
 
     vocab, merges = train_bpe(input_path=input_path, num_chunks=10000, vocab_size=vocab_size, special_tokens=special_tokens)
 
     # Save the vocabulary and merges to files.
-    write_merges(merges, "bpe/merges_tinystories.pkl")
-    write_vocab(vocab, "bpe/vocab_tinystories.pkl")
+    write_merges(merges, "checkpoints/tokenizer/merges_tinystories.pkl")
+    write_vocab(vocab, "checkpoints/tokenizer/vocab_tinystories.pkl")
 
 
 def train_bpe_expts_owt():
-    input_path = "cs336_basics/data/owt_train.txt"
+    input_path = f"{project_root}data/owt_train.txt"
     vocab_size = 32000
     special_tokens = ["<|endoftext|>"]
 
     vocab, merges = train_bpe(input_path=input_path, num_chunks=10000, vocab_size=vocab_size, special_tokens=special_tokens)
     
     # Save the vocabulary and merges to files.
-    write_merges(merges, "bpe/merges_owt.pkl")
-    write_vocab(vocab, "bpe/vocab_owt.pkl")
+    write_merges(merges, "checkpoints/tokenizer/merges_owt.pkl")
+    write_vocab(vocab, "checkpoints/tokenizer/vocab_owt.pkl")
 
 
 def write_merges(merges, outpath):
@@ -498,4 +502,4 @@ def write_vocab(vocab, outpath):
 
 if __name__ == "__main__":
     # Example usage
-    train_bpe_expts_owt()
+    train_bpe_tinystories()
